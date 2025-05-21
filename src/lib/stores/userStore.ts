@@ -51,10 +51,12 @@ async function loadUser() {
       )
     }
 
+    const queries = [Query.equal("user_id", acc.$id), Query.limit(1)]
+
     const response = await databases.listDocuments(
       DATABASE_ID,
       USERS_EXTENDED_COLLECTION_ID,
-      [Query.equal("user_id", acc.$id), Query.limit(1)]
+      queries
     )
 
     if (response.documents.length > 0) {
@@ -63,7 +65,7 @@ async function loadUser() {
         ...userProfile,
         role: extendedData.role as "parent" | "child",
         family_id: extendedData.family_id as string,
-        $databaseId: extendedData.$databaseId,
+        $databaseId: extendedData.$id,
         $collectionId: extendedData.$collectionId,
       }
     }
@@ -76,16 +78,18 @@ async function loadUser() {
   } catch (e: any) {
     if (
       e.message.includes("User (role: guest) missing scope (account)") ||
-      e.message.includes("Session not found")
+      e.message.includes("Session not found") ||
+      e.type === "user_session_not_found" || // Appwrite SDK v11+
+      e.type === "general_unauthorized_scope" // Appwrite SDK v11+
     ) {
       userStore.update((s) => ({
         ...s,
         currentUser: null,
         loading: false,
-        error: null,
+        error: null, // No error displayed to user for this case
       }))
     } else {
-      console.error("Error loading user:", e)
+      console.error("[userStore] loadUser: A non-session error occurred:", e)
       userStore.update((s) => ({
         ...s,
         currentUser: null,

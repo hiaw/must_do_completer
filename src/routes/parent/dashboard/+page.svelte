@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { userStore, type UserProfile } from '$lib/stores/userStore';
+  import { userStore, type UserProfile, loadUser } from '$lib/stores/userStore';
   import { goto } from '$app/navigation';
   import { teams, databases } from '$lib/appwrite'; // Import teams and databases
-  import { Query } from 'appwrite';
+  import { Query, ID } from 'appwrite';
 
   // Assumed to be in your .env file, ensure they are!
   const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'must_dos_db';
@@ -18,6 +18,11 @@
   let taskTitle = '';
   let taskDescription = '';
   let assignedToUserId = '';
+
+  // Family creation
+  let familyName = '';
+  let isCreatingFamily = false;
+  let createFamilyError: string | null = null;
 
   onMount(() => {
     const unsubscribe = userStore.subscribe(async (value) => {
@@ -109,6 +114,53 @@
     // TODO: Implement Appwrite database call to create task
     alert('Task creation logic not yet implemented.');
   }
+
+  async function handleCreateFamily() {
+    if (!familyName.trim()) {
+      createFamilyError = 'Family name is required.';
+      return;
+    }
+    if (!$userStore.currentUser || !$userStore.currentUser.$id || !$userStore.currentUser.$databaseId) {
+      createFamilyError = 'Current user data is incomplete. Cannot create family.';
+      console.error("User data for family creation:", $userStore.currentUser);
+      return;
+    }
+
+    isCreatingFamily = true;
+    createFamilyError = null;
+
+    try {
+      // 1. Create the Appwrite Team
+      const newTeam = await teams.create(ID.unique(), familyName.trim(), ['owner', 'parent']);
+      console.log('New team created:', newTeam);
+
+      // 2. Update the parent's document in users_extended with the new family_id (team.$id)
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        $userStore.currentUser.$databaseId, // This is the document ID from users_extended
+        { family_id: newTeam.$id }
+      );
+      console.log('UsersExtended document updated with family_id.');
+
+      // 3. Optionally, add the creator to the team explicitly if needed.
+      // teams.createMembership(newTeam.$id, $userStore.currentUser.email, ['owner', 'parent'], '/'); // Example
+      // For now, assuming the creator is owner by default from teams.create.
+
+      // 4. Refresh user data to reflect the new family_id
+      await loadUser(); 
+      // The userStore subscription should automatically hide the create family form 
+      // and show the main dashboard sections.
+
+      familyName = ''; // Clear the input
+
+    } catch (err: any) {
+      console.error('Failed to create family:', err);
+      createFamilyError = err.message || 'An unknown error occurred while creating the family.';
+    } finally {
+      isCreatingFamily = false;
+    }
+  }
 </script>
 
 {#if $userStore.loading}
@@ -118,8 +170,22 @@
   <p>Welcome, {$userStore.currentUser.name || $userStore.currentUser.email}!</p>
 
   {#if !$userStore.currentUser.family_id}
-    <p>You are not currently part of a family. Please create or join a family.</p>
-    <!-- TODO: Add UI for family creation/joining -->
+    <section class="family-creation-section">
+      <h2>Create Your Family Group</h2>
+      <p>To start managing tasks, you need to create a family group.</p>
+      <form on:submit|preventDefault={handleCreateFamily}>
+        <div>
+          <label for="familyName">Family Name:</label>
+          <input type="text" id="familyName" bind:value={familyName} required disabled={isCreatingFamily} />
+        </div>
+        <button type="submit" disabled={isCreatingFamily}>
+          {#if isCreatingFamily}Creating...{:else}Create Family{/if}
+        </button>
+        {#if createFamilyError}
+          <p style="color: red;">{createFamilyError}</p>
+        {/if}
+      </form>
+    </section>
   {:else}
     <section>
       <h2>Create New Task</h2>
@@ -192,6 +258,9 @@
     padding: 1rem;
     border: 1px solid #eee;
     border-radius: 8px;
+  }
+  .family-creation-section {
+    background-color: #f9f9f9;
   }
   form div {
     margin-bottom: 1rem;
