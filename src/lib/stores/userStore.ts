@@ -1,6 +1,6 @@
 import { writable } from "svelte/store"
 import { account, databases } from "$lib/appwrite"
-import { Query } from "appwrite"
+import { Query, ID } from "appwrite"
 
 // Define these in your .env or directly if they are fixed
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
@@ -67,6 +67,44 @@ async function loadUser() {
         family_id: extendedData.family_id as string,
         $databaseId: extendedData.$id,
         $collectionId: extendedData.$collectionId,
+      }
+    } else {
+      // No extended profile found for this authenticated user. Create one.
+      console.log(
+        `[userStore] No extended profile for ${acc.$id}. Creating one with role: 'parent'.`
+      )
+      try {
+        const newExtendedProfileData = {
+          user_id: acc.$id,
+          role: "parent",
+          // family_id will be implicitly undefined/null by not including it
+        }
+        const newDocument = await databases.createDocument(
+          DATABASE_ID,
+          USERS_EXTENDED_COLLECTION_ID,
+          ID.unique(), // Generate a unique document ID
+          newExtendedProfileData
+        )
+
+        userProfile = {
+          ...userProfile,
+          role: "parent", // Set role in the local userProfile object
+          family_id: undefined, // Explicitly set family_id as undefined
+          $databaseId: newDocument.$id, // Store the new document's ID
+          $collectionId: newDocument.$collectionId,
+        }
+        console.log(
+          "[userStore] Created new extended profile document:",
+          newDocument
+        )
+      } catch (creationError: any) {
+        console.error(
+          "[userStore] Failed to create extended profile:",
+          creationError
+        )
+        // If creation fails, userProfile will not have role/family_id.
+        // The main error catch block might handle session issues, or the user will effectively be role-less.
+        // For now, we let it proceed; the user won't be able to access parent dashboard without a role.
       }
     }
 
