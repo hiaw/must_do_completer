@@ -120,19 +120,32 @@ async function loadUser() {
           else if (membership.roles.includes("parent")) teamRole = "parent"
           else if (membership.roles.includes("child")) teamRole = "child"
 
+          // Check if we need to sync name from team membership
+          const teamMembershipName = membership.userName || null
+          const needsNameSync = teamMembershipName && !userProfile.name
+
           if (
             teamRole &&
             (userProfile.family_id !== primaryTeam.$id ||
-              userProfile.role !== teamRole)
+              userProfile.role !== teamRole ||
+              needsNameSync)
           ) {
             console.log(
-              `[userStore] Syncing team membership for ${acc.$id}. Team: ${primaryTeam.$id}, Role: ${teamRole}`
+              `[userStore] Syncing team membership for ${acc.$id}. Team: ${primaryTeam.$id}, Role: ${teamRole}, Name: ${teamMembershipName}`
             )
-            const updateData: { family_id: string; role: "parent" | "child" } =
-              {
-                family_id: primaryTeam.$id,
-                role: teamRole,
-              }
+            const updateData: {
+              family_id: string
+              role: "parent" | "child"
+              name?: string
+            } = {
+              family_id: primaryTeam.$id,
+              role: teamRole,
+            }
+
+            // Include name in update if we have one from team membership and user doesn't have a name yet
+            if (teamMembershipName && !userProfile.name) {
+              updateData.name = teamMembershipName
+            }
 
             if (extendedProfileDocId) {
               await databases.updateDocument(
@@ -159,6 +172,11 @@ async function loadUser() {
             userProfile.family_id = primaryTeam.$id
             userProfile.role = teamRole
             userProfile.$databaseId = extendedProfileDocId
+
+            // Update the name in userProfile if we synced it
+            if (updateData.name) {
+              userProfile.name = updateData.name
+            }
           }
         } else {
           console.warn(

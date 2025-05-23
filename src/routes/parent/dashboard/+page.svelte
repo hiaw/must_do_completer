@@ -43,6 +43,14 @@
   let isUpdatingParentName = false;
   let updateParentNameError: string | null = null;
 
+  // Add child functionality
+  let isAddingChild = false;
+  let newChildEmail = '';
+  let newChildName = '';
+  let isInvitingChild = false;
+  let inviteChildError: string | null = null;
+  let inviteChildSuccess: string | null = null;
+
   // Family creation
   let familyName = '';
   let isCreatingFamily = false;
@@ -97,9 +105,66 @@
         const appwriteUser = await teams.getMembership(familyTeamId, membership.$id);
         const extendedProfile = userProfilesResponse.documents.find(doc => doc.user_id === membership.userId);
         
+        console.log(`[fetchFamilyMembers] Processing member ${membership.userId}:`, {
+          extendedProfileName: extendedProfile?.name,
+          membershipRoles: membership.roles
+        });
+        
+        // For pending invitations, the name might be in the invitation but not in the membership yet
+        // Let's try to get the name from either source
+        let memberName = extendedProfile?.name || appwriteUser.userName || membership.userName;
+        
+        // If this is a pending invitation without an extended profile, create one with the invitation name
+        if (!extendedProfile && membership.userName && membership.status === 'pending') {
+          try {
+            console.log(`[fetchFamilyMembers] Creating users_extended document for pending invitation ${membership.userId} with name "${membership.userName}"`);
+            const newExtendedProfile = await databases.createDocument(
+              DATABASE_ID,
+              USERS_EXTENDED_COLLECTION_ID,
+              ID.unique(),
+              {
+                user_id: membership.userId,
+                role: membership.roles.includes('child') ? 'child' : 'parent',
+                family_id: familyTeamId,
+                name: membership.userName
+              }
+            );
+            console.log(`[fetchFamilyMembers] Created users_extended document:`, newExtendedProfile);
+            memberName = membership.userName;
+          } catch (createError) {
+            console.warn(`[fetchFamilyMembers] Failed to create users_extended for ${membership.userId}:`, createError);
+          }
+        }
+        
+        // Check if we need to sync name from team membership to users_extended
+        const teamMembershipName = appwriteUser.userName || membership.userName;
+        const hasExtendedProfile = !!extendedProfile;
+        const needsNameSync = teamMembershipName && hasExtendedProfile && !extendedProfile.name;
+        
+        // If we have a team membership name but no name in users_extended, sync it
+        if (needsNameSync && extendedProfile) {
+          try {
+            console.log(`[fetchFamilyMembers] Attempting to sync name "${teamMembershipName}" for user ${membership.userId}`);
+            await databases.updateDocument(
+              DATABASE_ID,
+              USERS_EXTENDED_COLLECTION_ID,
+              extendedProfile.$id,
+              { name: teamMembershipName }
+            );
+            console.log(`[fetchFamilyMembers] Successfully synced name "${teamMembershipName}" for user ${membership.userId}`);
+            // Update the local extendedProfile object so it reflects in the UI immediately
+            extendedProfile.name = teamMembershipName;
+            memberName = teamMembershipName;
+          } catch (syncError) {
+            console.warn(`[fetchFamilyMembers] Failed to sync name for user ${membership.userId}:`, syncError);
+          }
+        }
+        
+        const finalName = memberName || 'Unnamed User';
+        
         detailedMembers.push({
           $id: membership.userId,
-          name: extendedProfile?.name || appwriteUser.userName, // Prefer extended profile name
+          name: finalName,
           email: appwriteUser.userEmail,
           prefs: {}, // Prefs not directly available here, might need another call or adjust if needed
           role: extendedProfile?.role as ('parent' | 'child') || (membership.roles.includes('child') ? 'child' : membership.roles.includes('parent') ? 'parent' : undefined),
@@ -355,6 +420,101 @@
       isUpdatingParentName = false;
     }
   }
+
+  function startAddingChild() {
+    isAddingChild = true;
+    newChildEmail = '';
+    newChildName = '';
+    inviteChildError = null;
+    inviteChildSuccess = null;
+  }
+
+  function cancelAddingChild() {
+    isAddingChild = false;
+    newChildEmail = '';
+    newChildName = '';
+    inviteChildError = null;
+    inviteChildSuccess = null;
+  }
+
+  async function inviteChild() {
+    if (!newChildEmail.trim()) {
+      inviteChildError = 'Email is required.';
+      return;
+    }
+
+    if (!$userStore.currentUser?.family_id) {
+      inviteChildError = 'No family context found.';
+      return;
+    }
+
+    isInvitingChild = true;
+    inviteChildError = null;
+    inviteChildSuccess = null;
+
+    try {
+      const trimmedEmail = newChildEmail.trim();
+      const teamRoles = ['child'];
+      const targetUrl = `${window.location.origin}/family/join?invitedRole=child`;
+
+      console.log('[inviteChild] Attempting to create membership with:', {
+        teamId: $userStore.currentUser.family_id,
+        email: trimmedEmail,
+        roles: teamRoles,
+        url: targetUrl,
+        name: newChildName.trim() || undefined
+      });
+
+      const newMembership = await teams.createMembership(
+        $userStore.currentUser.family_id,
+        teamRoles,
+        trimmedEmail,
+        undefined,
+        undefined,
+        targetUrl,
+        newChildName.trim() || undefined
+      );
+
+      console.log('[inviteChild] Membership created successfully:', newMembership);
+
+      // Create a users_extended document immediately with the invitation details
+      if (newChildName.trim()) {
+        try {
+          console.log('[inviteChild] Creating users_extended document for invited child');
+          const tempExtendedProfile = await databases.createDocument(
+            DATABASE_ID,
+            USERS_EXTENDED_COLLECTION_ID,
+            ID.unique(),
+            {
+              user_id: newMembership.userId, // This should be the invited user's ID
+              role: 'child',
+              family_id: $userStore.currentUser.family_id,
+              name: newChildName.trim()
+            }
+          );
+          console.log('[inviteChild] Created users_extended document:', tempExtendedProfile);
+        } catch (createError) {
+          console.warn('[inviteChild] Failed to create users_extended document:', createError);
+          // Don't fail the whole invitation if this fails
+        }
+      }
+
+      inviteChildSuccess = `Invitation sent to ${trimmedEmail}${newChildName ? ` (${newChildName})` : ''}!`;
+      
+      // Clear form but keep it open for adding more children
+      newChildEmail = '';
+      newChildName = '';
+
+      // Refresh family members list
+      await fetchFamilyMembers($userStore.currentUser.family_id);
+
+    } catch (err: any) {
+      console.error('Failed to invite child:', err);
+      inviteChildError = err.message || 'An unknown error occurred while sending the invitation.';
+    } finally {
+      isInvitingChild = false;
+    }
+  }
 </script>
 
 {#if $userStore.loading}
@@ -490,7 +650,72 @@
     </section>
 
     <section>
-      <h2>Children in Family</h2>
+      <div class="section-header">
+        <h2>Children in Family</h2>
+        {#if !isAddingChild && $userStore.currentUser?.family_id}
+          <button 
+            type="button" 
+            on:click={startAddingChild}
+            class="add-child-btn"
+          >
+            + Add Child
+          </button>
+        {/if}
+      </div>
+
+      {#if isAddingChild}
+        <div class="add-child-form">
+          <h3>Invite New Child</h3>
+          <div class="form-fields">
+            <div>
+              <label for="newChildEmail">Child's Email:</label>
+              <input 
+                type="email" 
+                id="newChildEmail"
+                bind:value={newChildEmail} 
+                placeholder="child@example.com"
+                disabled={isInvitingChild}
+                required
+              />
+            </div>
+            <div>
+              <label for="newChildName">Child's Name (optional):</label>
+              <input 
+                type="text" 
+                id="newChildName"
+                bind:value={newChildName} 
+                placeholder="e.g., Emma, Jake"
+                disabled={isInvitingChild}
+              />
+            </div>
+          </div>
+          <div class="edit-buttons">
+            <button 
+              type="button" 
+              on:click={inviteChild}
+              disabled={isInvitingChild}
+              class="save-btn"
+            >
+              {#if isInvitingChild}Sending Invitation...{:else}Send Invitation{/if}
+            </button>
+            <button 
+              type="button" 
+              on:click={cancelAddingChild}
+              disabled={isInvitingChild}
+              class="cancel-btn"
+            >
+              Cancel
+            </button>
+          </div>
+          {#if inviteChildSuccess}
+            <p class="success-text">{inviteChildSuccess}</p>
+          {/if}
+          {#if inviteChildError}
+            <p class="error-text">{inviteChildError}</p>
+          {/if}
+        </div>
+      {/if}
+
       {#if isLoadingFamily}
         <p>Loading family members...</p>
       {:else if children.length > 0}
@@ -550,8 +775,8 @@
         </div>
       {:else if familyMembers.length > 0 && children.length === 0}
         <p>No users with the 'child' role found in your family. <a href="/parent/family">Manage Family Roles</a></p>
-      {:else}
-        <p>No members found in your family. <a href="/parent/family">Manage Family</a></p>
+      {:else if !isAddingChild}
+        <p>No children in your family yet. Click "Add Child" above to invite your first child!</p>
       {/if}
       {#if familyError}
         <p style="color: red;">Error loading family members: {familyError}</p>
@@ -961,5 +1186,77 @@
   button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+  }
+  
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  
+  .section-header h2 {
+    margin: 0;
+  }
+  
+  .add-child-btn {
+    padding: 0.5rem 1rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: bold;
+  }
+  
+  .add-child-btn:hover {
+    background-color: #0056b3;
+  }
+  
+  .add-child-form {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .add-child-form h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+  }
+  
+  .form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .form-fields > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .form-fields label {
+    font-weight: bold;
+    color: #333;
+  }
+  
+  .form-fields input {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    max-width: 300px;
+  }
+  
+  .success-text {
+    color: #28a745;
+    font-size: 0.875rem;
+    margin: 0;
+    font-weight: bold;
   }
 </style> 
