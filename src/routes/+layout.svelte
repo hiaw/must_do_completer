@@ -15,6 +15,8 @@
     <span>Hello, {$userStore.currentUser.name || $userStore.currentUser.email}!</span>
     {#if $userStore.currentUser.role === 'parent'}
       <a href="/parent/dashboard">Parent Dashboard</a>
+    {:else if $userStore.currentUser.role === 'child'}
+      <a href="/child/dashboard">My Tasks</a>
     {/if}
     <a href="/login" on:click|preventDefault={async () => {
       const { logout } = await import('$lib/stores/userStore');

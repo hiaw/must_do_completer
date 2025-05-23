@@ -8,6 +8,7 @@
   // Assumed to be in your .env file, ensure they are!
   const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'must_dos_db';
   const USERS_EXTENDED_COLLECTION_ID = import.meta.env.VITE_APPWRITE_USERS_EXTENDED_COLLECTION_ID || 'users_extended';
+  const TASKS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_TASKS_COLLECTION_ID || 'tasks';
 
   let familyMembers: UserProfile[] = [];
   let children: UserProfile[] = [];
@@ -18,6 +19,17 @@
   let taskTitle = '';
   let taskDescription = '';
   let assignedToUserId = '';
+  let taskPriority: 'low' | 'medium' | 'high' = 'medium';
+  let taskPoints = 10;
+  let taskDueDate = '';
+  let isCreatingTask = false;
+  let createTaskError: string | null = null;
+  let createTaskSuccess: string | null = null;
+
+  // Task listing
+  let allTasks: any[] = [];
+  let isLoadingTasks = false;
+  let tasksError: string | null = null;
 
   // Family creation
   let familyName = '';
@@ -38,6 +50,7 @@
       } else if (value.currentUser.family_id) {
         // User is loaded, is a parent, and has a family_id
         await fetchFamilyMembers(value.currentUser.family_id);
+        await fetchAllTasks();
       }
       // If currentUser is a parent but no family_id, the template handles showing the appropriate message.
       // No explicit 'else if' needed here for that case unless we want to trigger other script logic.
@@ -95,24 +108,89 @@
     }
   }
 
+  async function fetchAllTasks() {
+    if (!$userStore.currentUser?.family_id) return;
+
+    isLoadingTasks = true;
+    tasksError = null;
+
+    try {
+      // Fetch all tasks for this family
+      const tasksResponse = await databases.listDocuments(
+        DATABASE_ID,
+        TASKS_COLLECTION_ID,
+        [
+          Query.equal('family_id', $userStore.currentUser.family_id),
+          Query.orderDesc('created_at')
+        ]
+      );
+
+      allTasks = tasksResponse.documents;
+
+    } catch (err: any) {
+      console.error('Failed to fetch tasks:', err);
+      tasksError = err.message;
+    } finally {
+      isLoadingTasks = false;
+    }
+  }
+
   async function handleCreateTask() {
     if (!$userStore.currentUser?.family_id) {
-      alert('No family context found.');
+      createTaskError = 'No family context found.';
       return;
     }
     if (!taskTitle.trim() || !assignedToUserId) {
-        alert('Task title and assigned child are required.');
-        return;
+      createTaskError = 'Task title and assigned child are required.';
+      return;
     }
-    console.log('Creating task:', {
-      title: taskTitle,
-      description: taskDescription,
-      assignedToUserId: assignedToUserId,
-      familyId: $userStore.currentUser.family_id,
-      createdByUserId: $userStore.currentUser.$id
-    });
-    // TODO: Implement Appwrite database call to create task
-    alert('Task creation logic not yet implemented.');
+
+    isCreatingTask = true;
+    createTaskError = null;
+    createTaskSuccess = null;
+
+    try {
+      const taskData = {
+        title: taskTitle.trim(),
+        description: taskDescription.trim() || '',
+        assigned_to_user_id: assignedToUserId,
+        created_by_user_id: $userStore.currentUser.$id,
+        family_id: $userStore.currentUser.family_id,
+        status: 'pending',
+        priority: taskPriority,
+        points: taskPoints,
+        due_date: taskDueDate || undefined,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const newTask = await databases.createDocument(
+        DATABASE_ID,
+        TASKS_COLLECTION_ID,
+        'unique()', // Let Appwrite generate the ID
+        taskData
+      );
+
+      console.log('Task created successfully:', newTask);
+      createTaskSuccess = `Task "${taskTitle}" assigned to child successfully!`;
+      
+      // Reset form
+      taskTitle = '';
+      taskDescription = '';
+      assignedToUserId = '';
+      taskPriority = 'medium';
+      taskPoints = 10;
+      taskDueDate = '';
+
+      // Refresh task list
+      await fetchAllTasks();
+
+    } catch (err: any) {
+      console.error('Failed to create task:', err);
+      createTaskError = err.message || 'An unknown error occurred while creating the task.';
+    } finally {
+      isCreatingTask = false;
+    }
   }
 
   async function handleCreateFamily() {
@@ -192,31 +270,57 @@
       <form on:submit|preventDefault={handleCreateTask}>
         <div>
           <label for="taskTitle">Title:</label>
-          <input type="text" id="taskTitle" bind:value={taskTitle} required />
+          <input type="text" id="taskTitle" bind:value={taskTitle} required disabled={isCreatingTask} />
         </div>
         <div>
           <label for="taskDescription">Description (optional):</label>
-          <textarea id="taskDescription" bind:value={taskDescription}></textarea>
+          <textarea id="taskDescription" bind:value={taskDescription} disabled={isCreatingTask}></textarea>
         </div>
         <div>
           <label for="assignTo">Assign to Child:</label>
           {#if isLoadingFamily}
             <p>Loading children...</p>
           {:else if children.length > 0}
-            <select id="assignTo" bind:value={assignedToUserId} required>
+            <select id="assignTo" bind:value={assignedToUserId} required disabled={isCreatingTask}>
               <option value="" disabled>Select a child</option>
               {#each children as child}
                 <option value={child.$id}>{child.name || child.email}</option>
               {/each}
             </select>
           {:else}
-            <p>No children found in your family. <a href="/family-management">Manage Family</a></p> <!-- Placeholder link -->
+            <p>No children found in your family. <a href="/parent/family">Manage Family</a></p>
           {/if}
           {#if familyError}
             <p style="color: red;">Error loading family: {familyError}</p>
           {/if}
         </div>
-        <button type="submit" disabled={isLoadingFamily || children.length === 0}>Create Task</button>
+        <div class="form-row">
+          <div>
+            <label for="taskPriority">Priority:</label>
+            <select id="taskPriority" bind:value={taskPriority} disabled={isCreatingTask}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label for="taskPoints">Points:</label>
+            <input type="number" id="taskPoints" bind:value={taskPoints} min="0" max="100" disabled={isCreatingTask} />
+          </div>
+        </div>
+        <div>
+          <label for="taskDueDate">Due Date (optional):</label>
+          <input type="date" id="taskDueDate" bind:value={taskDueDate} disabled={isCreatingTask} />
+        </div>
+        <button type="submit" disabled={isCreatingTask || isLoadingFamily || children.length === 0}>
+          {#if isCreatingTask}Creating Task...{:else}Create Task{/if}
+        </button>
+        {#if createTaskSuccess}
+          <p style="color: green;">{createTaskSuccess}</p>
+        {/if}
+        {#if createTaskError}
+          <p style="color: red;">{createTaskError}</p>
+        {/if}
       </form>
     </section>
 
@@ -232,9 +336,9 @@
           {/each}
         </ul>
       {:else if familyMembers.length > 0 && children.length === 0}
-        <p>No users with the 'child' role found in your family. <a href="/family-management">Manage Family Roles</a></p>
+        <p>No users with the 'child' role found in your family. <a href="/parent/family">Manage Family Roles</a></p>
       {:else}
-        <p>No members found in your family. <a href="/family-management">Manage Family</a></p>
+        <p>No members found in your family. <a href="/parent/family">Manage Family</a></p>
       {/if}
       {#if familyError}
         <p style="color: red;">Error loading family members: {familyError}</p>
@@ -242,9 +346,56 @@
     </section>
 
     <section>
-      <h2>All Tasks (placeholder)</h2>
-      <!-- Task list will go here -->
-      <p>Task listing will be implemented next.</p>
+      <h2>All Family Tasks</h2>
+      {#if isLoadingTasks}
+        <p>Loading tasks...</p>
+      {:else if tasksError}
+        <p style="color: red;">Error loading tasks: {tasksError}</p>
+      {:else if allTasks.length > 0}
+        <div class="tasks-grid">
+          {#each allTasks as task (task.$id)}
+            {@const assignedChild = familyMembers.find(member => member.$id === task.assigned_to_user_id)}
+            <div class="task-card {task.status}">
+              <div class="task-header">
+                <h3>{task.title}</h3>
+                <div class="task-badges">
+                  <span class="status-badge {task.status}">{task.status}</span>
+                  <span class="priority-badge {task.priority}">{task.priority}</span>
+                </div>
+              </div>
+              
+              {#if task.description}
+                <p class="task-description">{task.description}</p>
+              {/if}
+              
+              <div class="task-details">
+                <div class="task-meta">
+                  <span class="assigned-to">
+                    <strong>Assigned to:</strong> {assignedChild?.name || assignedChild?.email || 'Unknown'}
+                  </span>
+                  <span class="points">
+                    <strong>Points:</strong> {task.points}
+                  </span>
+                  {#if task.due_date}
+                    <span class="due-date">
+                      <strong>Due:</strong> {new Date(task.due_date).toLocaleDateString()}
+                    </span>
+                  {/if}
+                </div>
+                
+                <div class="task-timestamps">
+                  <small>Created: {new Date(task.created_at).toLocaleDateString()}</small>
+                  {#if task.updated_at !== task.created_at}
+                    <small>Updated: {new Date(task.updated_at).toLocaleDateString()}</small>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="no-tasks">No tasks created yet. Create your first task above!</p>
+      {/if}
     </section>
   {/if}
 {:else}
@@ -278,6 +429,166 @@
     border-radius: 4px;
     box-sizing: border-box;
   }
+  
+  input[type="number"],
+  input[type="date"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  
+  .form-row > div {
+    margin-bottom: 0;
+  }
+  
+  .tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .task-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: #fff;
+    transition: box-shadow 0.2s;
+  }
+  
+  .task-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  
+  .task-card.pending {
+    border-left: 4px solid #007bff;
+  }
+  
+  .task-card.completed {
+    border-left: 4px solid #28a745;
+    opacity: 0.8;
+  }
+  
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+  }
+  
+  .task-header h3 {
+    margin: 0;
+    color: #333;
+    flex: 1;
+  }
+  
+  .task-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  
+  .status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  
+  .status-badge.pending {
+    background-color: #ffc107;
+    color: #000;
+  }
+  
+  .status-badge.completed {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .priority-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: white;
+  }
+  
+  .priority-badge.low {
+    background-color: #28a745;
+  }
+  
+  .priority-badge.medium {
+    background-color: #ffc107;
+    color: #000;
+  }
+  
+  .priority-badge.high {
+    background-color: #dc3545;
+  }
+  
+  .task-description {
+    color: #666;
+    font-style: italic;
+    margin: 0.5rem 0;
+  }
+  
+  .task-details {
+    margin-top: 1rem;
+  }
+  
+  .task-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .task-meta span {
+    font-size: 0.875rem;
+  }
+  
+  .assigned-to {
+    color: #007bff;
+  }
+  
+  .points {
+    color: #28a745;
+  }
+  
+  .due-date {
+    color: #dc3545;
+  }
+  
+  .task-timestamps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border-top: 1px solid #eee;
+    padding-top: 0.5rem;
+  }
+  
+  .task-timestamps small {
+    color: #888;
+    font-size: 0.75rem;
+  }
+  
+  .no-tasks {
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    padding: 2rem;
+  }
+  
   button {
     padding: 0.75rem 1.5rem;
     background-color: #007bff;

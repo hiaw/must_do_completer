@@ -1,6 +1,6 @@
 import { writable } from "svelte/store"
-import { account, databases } from "$lib/appwrite"
-import { Query, ID } from "appwrite"
+import { account, databases, teams } from "$lib/appwrite"
+import { ID, Query } from "appwrite"
 
 // Define these in your .env or directly if they are fixed
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
@@ -51,16 +51,16 @@ async function loadUser() {
       )
     }
 
-    const queries = [Query.equal("user_id", acc.$id), Query.limit(1)]
-
-    const response = await databases.listDocuments(
+    // Attempt to get existing extended profile
+    let extendedProfileDocId: string | undefined
+    const existingProfilesResponse = await databases.listDocuments(
       DATABASE_ID,
       USERS_EXTENDED_COLLECTION_ID,
-      queries
+      [Query.equal("user_id", acc.$id), Query.limit(1)]
     )
 
-    if (response.documents.length > 0) {
-      const extendedData = response.documents[0]
+    if (existingProfilesResponse.documents.length > 0) {
+      const extendedData = existingProfilesResponse.documents[0]
       userProfile = {
         ...userProfile,
         role: extendedData.role as "parent" | "child",
@@ -68,44 +68,106 @@ async function loadUser() {
         $databaseId: extendedData.$id,
         $collectionId: extendedData.$collectionId,
       }
+      extendedProfileDocId = extendedData.$id
     } else {
-      // No extended profile found for this authenticated user. Create one.
+      // No existing extended profile, create a default one (role: parent, no family_id yet)
       console.log(
         `[userStore] No extended profile for ${acc.$id}. Creating one with role: 'parent'.`
       )
-      try {
-        const newExtendedProfileData = {
-          user_id: acc.$id,
-          role: "parent",
-          // family_id will be implicitly undefined/null by not including it
-        }
-        const newDocument = await databases.createDocument(
-          DATABASE_ID,
-          USERS_EXTENDED_COLLECTION_ID,
-          ID.unique(), // Generate a unique document ID
-          newExtendedProfileData
+      const newExtendedProfileData = {
+        user_id: acc.$id,
+        role: "parent",
+      }
+      const newDocument = await databases.createDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        ID.unique(),
+        newExtendedProfileData
+      )
+      userProfile = {
+        ...userProfile,
+        role: "parent",
+        family_id: undefined,
+        $databaseId: newDocument.$id,
+        $collectionId: newDocument.$collectionId,
+      }
+      extendedProfileDocId = newDocument.$id
+      console.log(
+        "[userStore] Created new extended profile document:",
+        newDocument
+      )
+    }
+
+    // Check team memberships and sync with users_extended if necessary
+    try {
+      const teamList = await teams.list() // List teams the user is a member of
+      if (teamList.teams.length > 0) {
+        const primaryTeam = teamList.teams[0] // Assuming user is part of one family team for now
+
+        // Correctly fetch the user's specific membership in this team
+        const userMembershipsInTeam = await teams.listMemberships(
+          primaryTeam.$id,
+          [Query.equal("userId", acc.$id), Query.limit(1)]
         )
 
-        userProfile = {
-          ...userProfile,
-          role: "parent", // Set role in the local userProfile object
-          family_id: undefined, // Explicitly set family_id as undefined
-          $databaseId: newDocument.$id, // Store the new document's ID
-          $collectionId: newDocument.$collectionId,
+        if (userMembershipsInTeam.memberships.length > 0) {
+          const membership = userMembershipsInTeam.memberships[0] // This is the user's specific membership object
+
+          let teamRole: "parent" | "child" | undefined = undefined
+          if (membership.roles.includes("owner")) teamRole = "parent"
+          // Often 'owner' implies 'parent' in this context
+          else if (membership.roles.includes("parent")) teamRole = "parent"
+          else if (membership.roles.includes("child")) teamRole = "child"
+
+          if (
+            teamRole &&
+            (userProfile.family_id !== primaryTeam.$id ||
+              userProfile.role !== teamRole)
+          ) {
+            console.log(
+              `[userStore] Syncing team membership for ${acc.$id}. Team: ${primaryTeam.$id}, Role: ${teamRole}`
+            )
+            const updateData: { family_id: string; role: "parent" | "child" } =
+              {
+                family_id: primaryTeam.$id,
+                role: teamRole,
+              }
+
+            if (extendedProfileDocId) {
+              await databases.updateDocument(
+                DATABASE_ID,
+                USERS_EXTENDED_COLLECTION_ID,
+                extendedProfileDocId,
+                updateData
+              )
+            } else {
+              console.warn(
+                "[userStore] Extended profile document ID was missing during team sync, attempting to create."
+              )
+              const newDocForTeam = await databases.createDocument(
+                DATABASE_ID,
+                USERS_EXTENDED_COLLECTION_ID,
+                ID.unique(),
+                {
+                  user_id: acc.$id,
+                  ...updateData,
+                }
+              )
+              extendedProfileDocId = newDocForTeam.$id
+            }
+            userProfile.family_id = primaryTeam.$id
+            userProfile.role = teamRole
+            userProfile.$databaseId = extendedProfileDocId
+          }
+        } else {
+          console.warn(
+            `[userStore] User ${acc.$id} is in team ${primaryTeam.name} (${primaryTeam.$id}) via teams.list(), but their specific membership details were not found via listMemberships.`
+          )
         }
-        console.log(
-          "[userStore] Created new extended profile document:",
-          newDocument
-        )
-      } catch (creationError: any) {
-        console.error(
-          "[userStore] Failed to create extended profile:",
-          creationError
-        )
-        // If creation fails, userProfile will not have role/family_id.
-        // The main error catch block might handle session issues, or the user will effectively be role-less.
-        // For now, we let it proceed; the user won't be able to access parent dashboard without a role.
       }
+    } catch (teamError) {
+      console.warn("[userStore] Could not sync team memberships:", teamError)
+      // Non-critical for basic profile loading, but user might not see family context
     }
 
     userStore.update((s) => ({
@@ -117,14 +179,14 @@ async function loadUser() {
     if (
       e.message.includes("User (role: guest) missing scope (account)") ||
       e.message.includes("Session not found") ||
-      e.type === "user_session_not_found" || // Appwrite SDK v11+
-      e.type === "general_unauthorized_scope" // Appwrite SDK v11+
+      e.type === "user_session_not_found" ||
+      e.type === "general_unauthorized_scope"
     ) {
       userStore.update((s) => ({
         ...s,
         currentUser: null,
         loading: false,
-        error: null, // No error displayed to user for this case
+        error: null,
       }))
     } else {
       console.error("[userStore] loadUser: A non-session error occurred:", e)
@@ -141,7 +203,7 @@ async function loadUser() {
 async function logout() {
   try {
     await account.deleteSession("current")
-    userStore.set({ ...initialState, loading: false }) // Reset but indicate loading is done
+    userStore.set({ ...initialState, loading: false })
   } catch (e: any) {
     console.error("Error during logout:", e)
     userStore.update((s) => ({ ...s, error: e.message, loading: false }))
