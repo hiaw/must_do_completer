@@ -31,6 +31,12 @@
   let isLoadingTasks = false;
   let tasksError: string | null = null;
 
+  // Child name editing
+  let editingChildId: string | null = null;
+  let editingChildName = '';
+  let isUpdatingChildName = false;
+  let updateNameError: string | null = null;
+
   // Family creation
   let familyName = '';
   let isCreatingFamily = false;
@@ -239,6 +245,61 @@
       isCreatingFamily = false;
     }
   }
+
+  function startEditingChildName(child: UserProfile) {
+    editingChildId = child.$id;
+    editingChildName = child.name || '';
+    updateNameError = null;
+  }
+
+  function cancelEditingChildName() {
+    editingChildId = null;
+    editingChildName = '';
+    updateNameError = null;
+  }
+
+  async function saveChildName() {
+    if (!editingChildId || !editingChildName.trim()) {
+      updateNameError = 'Name is required.';
+      return;
+    }
+
+    const child = familyMembers.find(m => m.$id === editingChildId);
+    if (!child || !child.$databaseId) {
+      updateNameError = 'Child data not found.';
+      return;
+    }
+
+    isUpdatingChildName = true;
+    updateNameError = null;
+
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        child.$databaseId,
+        { name: editingChildName.trim() }
+      );
+
+      // Update local state
+      const childIndex = familyMembers.findIndex(m => m.$id === editingChildId);
+      if (childIndex !== -1) {
+        familyMembers[childIndex].name = editingChildName.trim();
+        familyMembers = [...familyMembers]; // Trigger reactivity
+        children = familyMembers.filter(member => member.role === 'child');
+      }
+
+      // Clear editing state
+      editingChildId = null;
+      editingChildName = '';
+
+    } catch (err: any) {
+      console.error('Failed to update child name:', err);
+      updateNameError = err.message || 'Failed to update name.';
+    } finally {
+      isUpdatingChildName = false;
+    }
+  }
 </script>
 
 {#if $userStore.loading}
@@ -329,12 +390,60 @@
       {#if isLoadingFamily}
         <p>Loading family members...</p>
       {:else if children.length > 0}
-        <ul>
+        <div class="children-list">
           {#each children as child (child.$id)}
-            <li>{child.name || child.email} (ID: {child.$id})</li>
-            <!-- TODO: Add link to view tasks for this child -->
+            <div class="child-item">
+              {#if editingChildId === child.$id}
+                <div class="child-edit-form">
+                  <input 
+                    type="text" 
+                    bind:value={editingChildName} 
+                    placeholder="Enter child's name"
+                    disabled={isUpdatingChildName}
+                    class="child-name-input"
+                  />
+                  <div class="edit-buttons">
+                    <button 
+                      type="button" 
+                      on:click={saveChildName}
+                      disabled={isUpdatingChildName}
+                      class="save-btn"
+                    >
+                      {#if isUpdatingChildName}Saving...{:else}Save{/if}
+                    </button>
+                    <button 
+                      type="button" 
+                      on:click={cancelEditingChildName}
+                      disabled={isUpdatingChildName}
+                      class="cancel-btn"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {#if updateNameError}
+                    <p class="error-text">{updateNameError}</p>
+                  {/if}
+                </div>
+              {:else}
+                <div class="child-info">
+                  <div class="child-details">
+                    <span class="child-name">
+                      {child.name || 'Unnamed Child'}
+                    </span>
+                    <span class="child-email">{child.email}</span>
+                  </div>
+                  <button 
+                    type="button" 
+                    on:click={() => startEditingChildName(child)}
+                    class="edit-name-btn"
+                  >
+                    {child.name ? 'Edit Name' : 'Set Name'}
+                  </button>
+                </div>
+              {/if}
+            </div>
           {/each}
-        </ul>
+        </div>
       {:else if familyMembers.length > 0 && children.length === 0}
         <p>No users with the 'child' role found in your family. <a href="/parent/family">Manage Family Roles</a></p>
       {:else}
@@ -587,6 +696,108 @@
     color: #888;
     font-style: italic;
     padding: 2rem;
+  }
+  
+  .children-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .child-item {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: #fff;
+  }
+  
+  .child-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .child-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .child-name {
+    font-weight: bold;
+    color: #333;
+    font-size: 1rem;
+  }
+  
+  .child-email {
+    color: #666;
+    font-size: 0.875rem;
+  }
+  
+  .edit-name-btn {
+    padding: 0.5rem 1rem;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .edit-name-btn:hover {
+    background-color: #5a6268;
+  }
+  
+  .child-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .child-name-input {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  
+  .edit-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .save-btn {
+    padding: 0.5rem 1rem;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .save-btn:hover:not(:disabled) {
+    background-color: #218838;
+  }
+  
+  .cancel-btn {
+    padding: 0.5rem 1rem;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .cancel-btn:hover:not(:disabled) {
+    background-color: #5a6268;
+  }
+  
+  .error-text {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin: 0;
   }
   
   button {

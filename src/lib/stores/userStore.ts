@@ -63,6 +63,7 @@ async function loadUser() {
       const extendedData = existingProfilesResponse.documents[0]
       userProfile = {
         ...userProfile,
+        name: extendedData.name || userProfile.name,
         role: extendedData.role as "parent" | "child",
         family_id: extendedData.family_id as string,
         $databaseId: extendedData.$id,
