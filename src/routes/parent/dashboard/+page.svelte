@@ -37,6 +37,12 @@
   let isUpdatingChildName = false;
   let updateNameError: string | null = null;
 
+  // Parent name editing
+  let isEditingParentName = false;
+  let editingParentName = '';
+  let isUpdatingParentName = false;
+  let updateParentNameError: string | null = null;
+
   // Family creation
   let familyName = '';
   let isCreatingFamily = false;
@@ -300,13 +306,111 @@
       isUpdatingChildName = false;
     }
   }
+
+  function startEditingParentName() {
+    isEditingParentName = true;
+    editingParentName = $userStore.currentUser?.name || '';
+    updateParentNameError = null;
+  }
+
+  function cancelEditingParentName() {
+    isEditingParentName = false;
+    editingParentName = '';
+    updateParentNameError = null;
+  }
+
+  async function saveParentName() {
+    if (!editingParentName.trim()) {
+      updateParentNameError = 'Name is required.';
+      return;
+    }
+
+    if (!$userStore.currentUser?.$databaseId) {
+      updateParentNameError = 'User data not found.';
+      return;
+    }
+
+    isUpdatingParentName = true;
+    updateParentNameError = null;
+
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        $userStore.currentUser.$databaseId,
+        { name: editingParentName.trim() }
+      );
+
+      // Reload user data to reflect the change
+      await loadUser();
+
+      // Clear editing state
+      isEditingParentName = false;
+      editingParentName = '';
+
+    } catch (err: any) {
+      console.error('Failed to update parent name:', err);
+      updateParentNameError = err.message || 'Failed to update name.';
+    } finally {
+      isUpdatingParentName = false;
+    }
+  }
 </script>
 
 {#if $userStore.loading}
   <p>Loading user data...</p>
 {:else if $userStore.currentUser && $userStore.currentUser.role === 'parent'}
   <h1>Parent Dashboard</h1>
-  <p>Welcome, {$userStore.currentUser.name || $userStore.currentUser.email}!</p>
+  <div class="welcome-section">
+    {#if isEditingParentName}
+      <div class="parent-name-edit">
+        <h2>Edit Your Name</h2>
+        <div class="parent-edit-form">
+          <input 
+            type="text" 
+            bind:value={editingParentName} 
+            placeholder="Enter your name"
+            disabled={isUpdatingParentName}
+            class="parent-name-input"
+          />
+          <div class="edit-buttons">
+            <button 
+              type="button" 
+              on:click={saveParentName}
+              disabled={isUpdatingParentName}
+              class="save-btn"
+            >
+              {#if isUpdatingParentName}Saving...{:else}Save{/if}
+            </button>
+            <button 
+              type="button" 
+              on:click={cancelEditingParentName}
+              disabled={isUpdatingParentName}
+              class="cancel-btn"
+            >
+              Cancel
+            </button>
+          </div>
+          {#if updateParentNameError}
+            <p class="error-text">{updateParentNameError}</p>
+          {/if}
+        </div>
+      </div>
+    {:else}
+      <div class="welcome-info">
+        <p class="welcome-text">
+          Welcome, <span class="user-name">{$userStore.currentUser.name || $userStore.currentUser.email}</span>!
+        </p>
+        <button 
+          type="button" 
+          on:click={startEditingParentName}
+          class="edit-name-btn"
+        >
+          {$userStore.currentUser.name ? 'Edit Name' : 'Set Name'}
+        </button>
+      </div>
+    {/if}
+  </div>
 
   {#if !$userStore.currentUser.family_id}
     <section class="family-creation-section">
@@ -798,6 +902,49 @@
     color: #dc3545;
     font-size: 0.875rem;
     margin: 0;
+  }
+  
+  .welcome-section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+  }
+  
+  .welcome-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .welcome-text {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  
+  .user-name {
+    font-weight: bold;
+    color: #007bff;
+  }
+  
+  .parent-name-edit h2 {
+    margin: 0 0 1rem 0;
+    color: #333;
+  }
+  
+  .parent-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .parent-name-input {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    max-width: 300px;
   }
   
   button {
