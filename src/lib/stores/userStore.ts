@@ -70,6 +70,19 @@ async function loadUser() {
         $collectionId: extendedData.$collectionId,
       }
       extendedProfileDocId = extendedData.$id
+
+      // If user is a child with complete profile data, skip team syncing
+      if (userProfile.role === "child" && userProfile.family_id) {
+        console.log(
+          `[userStore] Child user ${acc.$id} loaded successfully, skipping team sync`
+        )
+        userStore.update((s) => ({
+          ...s,
+          currentUser: userProfile,
+          loading: false,
+        }))
+        return
+      }
     } else {
       // No existing extended profile, create a default one (role: parent, no family_id yet)
       console.log(
@@ -99,7 +112,7 @@ async function loadUser() {
       )
     }
 
-    // Check team memberships and sync with users_extended if necessary
+    // Only perform team syncing for parents or users without complete profile data
     try {
       const teamList = await teams.list() // List teams the user is a member of
       if (teamList.teams.length > 0) {
@@ -219,6 +232,96 @@ async function loadUser() {
   }
 }
 
+// Lightweight version that skips team syncing - useful for child users
+async function loadUserBasic() {
+  try {
+    userStore.update((s) => ({ ...s, loading: true, error: null }))
+    const acc = await account.get()
+
+    let userProfile: UserProfile = {
+      $id: acc.$id,
+      name: acc.name,
+      email: acc.email,
+      prefs: acc.prefs as Record<string, any>,
+    }
+
+    if (!DATABASE_ID || !USERS_EXTENDED_COLLECTION_ID) {
+      throw new Error(
+        "Database ID or Users Extended Collection ID is not configured."
+      )
+    }
+
+    // Get existing extended profile
+    const existingProfilesResponse = await databases.listDocuments(
+      DATABASE_ID,
+      USERS_EXTENDED_COLLECTION_ID,
+      [Query.equal("user_id", acc.$id), Query.limit(1)]
+    )
+
+    if (existingProfilesResponse.documents.length > 0) {
+      const extendedData = existingProfilesResponse.documents[0]
+      userProfile = {
+        ...userProfile,
+        name: extendedData.name || userProfile.name,
+        role: extendedData.role as "parent" | "child",
+        family_id: extendedData.family_id as string,
+        $databaseId: extendedData.$id,
+        $collectionId: extendedData.$collectionId,
+      }
+    } else {
+      // Create basic profile for new users
+      const newExtendedProfileData = {
+        user_id: acc.$id,
+        role: "parent", // Default role
+      }
+      const newDocument = await databases.createDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        ID.unique(),
+        newExtendedProfileData
+      )
+      userProfile = {
+        ...userProfile,
+        role: "parent",
+        family_id: undefined,
+        $databaseId: newDocument.$id,
+        $collectionId: newDocument.$collectionId,
+      }
+    }
+
+    userStore.update((s) => ({
+      ...s,
+      currentUser: userProfile,
+      loading: false,
+    }))
+  } catch (e: any) {
+    if (
+      e.message.includes("User (role: guest) missing scope (account)") ||
+      e.message.includes("Session not found") ||
+      e.type === "user_session_not_found" ||
+      e.type === "general_unauthorized_scope"
+    ) {
+      userStore.update((s) => ({
+        ...s,
+        currentUser: null,
+        loading: false,
+        error: null,
+      }))
+    } else {
+      console.error(
+        "[userStore] loadUserBasic: A non-session error occurred:",
+        e
+      )
+      userStore.update((s) => ({
+        ...s,
+        currentUser: null,
+        loading: false,
+        error: e.message,
+      }))
+    }
+  }
+}
+
 async function logout() {
   try {
     await account.deleteSession("current")
@@ -229,4 +332,4 @@ async function logout() {
   }
 }
 
-export { userStore, loadUser, logout }
+export { userStore, loadUser, loadUserBasic, logout }
