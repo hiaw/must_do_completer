@@ -26,12 +26,6 @@
   let isLoadingTasks = false
   let tasksError: string | null = null
 
-  // Parent name editing
-  let isEditingParentName = false
-  let editingParentName = ""
-  let isUpdatingParentName = false
-  let updateParentNameError: string | null = null
-
   // Family creation
   let familyName = ""
   let isCreatingFamily = false
@@ -182,52 +176,6 @@
     }
   }
 
-  function startEditingParentName() {
-    isEditingParentName = true
-    editingParentName = $userStore.currentUser?.name || ""
-    updateParentNameError = null
-  }
-
-  function cancelEditingParentName() {
-    isEditingParentName = false
-    editingParentName = ""
-    updateParentNameError = null
-  }
-
-  async function saveParentName() {
-    if (!editingParentName.trim()) {
-      updateParentNameError = "Name is required."
-      return
-    }
-
-    if (!$userStore.currentUser?.$databaseId) {
-      updateParentNameError = "User data not found."
-      return
-    }
-
-    isUpdatingParentName = true
-    updateParentNameError = null
-
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        USERS_EXTENDED_COLLECTION_ID,
-        $userStore.currentUser.$databaseId,
-        { name: editingParentName.trim() },
-      )
-
-      await loadUser()
-
-      isEditingParentName = false
-      editingParentName = ""
-    } catch (err: any) {
-      console.error("Failed to update parent name:", err)
-      updateParentNameError = err.message || "Failed to update name."
-    } finally {
-      isUpdatingParentName = false
-    }
-  }
-
   function openCreateTaskModal() {
     isCreateTaskModalOpen = true
   }
@@ -263,59 +211,17 @@
     </div>
 
     <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-gray-50">
-      {#if isEditingParentName}
-        <div class="parent-name-edit">
-          <h2 class="text-xl font-semibold text-gray-800 mb-4">
-            Edit Your Name
-          </h2>
-          <div class="flex flex-col gap-4">
-            <input
-              type="text"
-              bind:value={editingParentName}
-              placeholder="Enter your name"
-              disabled={isUpdatingParentName}
-              class="max-w-xs px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <div class="flex gap-2">
-              <button
-                type="button"
-                on:click={saveParentName}
-                disabled={isUpdatingParentName}
-                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-              >
-                {#if isUpdatingParentName}Saving...{:else}Save{/if}
-              </button>
-              <button
-                type="button"
-                on:click={cancelEditingParentName}
-                disabled={isUpdatingParentName}
-                class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-            {#if updateParentNameError}
-              <p class="text-red-600 text-sm mt-2">{updateParentNameError}</p>
-            {/if}
-          </div>
-        </div>
-      {:else}
-        <div class="flex justify-between items-center">
-          <p class="text-lg">
-            Welcome, <span class="font-bold text-blue-600"
-              >{$userStore.currentUser.name ||
-                $userStore.currentUser.email}</span
-            >!
-          </p>
-          <button
-            type="button"
-            on:click={startEditingParentName}
-            class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm font-medium"
-          >
-            {$userStore.currentUser.name ? "Edit Name" : "Set Name"}
-          </button>
-        </div>
-      {/if}
+      <p class="text-lg text-center">
+        Welcome, <span class="font-bold text-blue-600">
+          {$userStore.currentUser.name || $userStore.currentUser.email}
+        </span>!
+      </p>
+      <p class="text-sm text-gray-600 text-center mt-2">
+        Manage your family and tasks from this dashboard.
+        <a href="/parent/family" class="text-blue-600 hover:underline">
+          Edit your profile and family settings
+        </a>
+      </p>
     </div>
 
     {#if !$userStore.currentUser.family_id}
