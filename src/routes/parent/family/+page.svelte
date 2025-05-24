@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { userStore, type UserProfile, loadUser } from "$lib/stores/userStore"
+  import { userStore, type UserProfile } from "$lib/stores/userStore"
   import { goto } from "$app/navigation"
   import { teams, databases, account } from "$lib/appwrite"
   import { Query, ID } from "appwrite"
@@ -24,34 +24,10 @@
   let isLoadingFamily = true
   let familyError: string | null = null
 
-  // Add family member functionality
+  // UI state
   let isAddingMember = false
-  let newMemberEmail = ""
-  let newMemberName = ""
-  let newMemberRole: "parent" | "child" = "child"
-  let isInvitingMember = false
-  let inviteMemberError: string | null = null
-  let inviteMemberSuccess: string | null = null
-
-  // Remove member functionality
-  let memberToRemove: UserProfile | null = null
-  let isRemovingMember = false
-  let removeMemberError: string | null = null
-
-  // Member detail modal functionality
   let selectedMember: UserProfile | null = null
-  let isEditingMemberName = false
-  let editingMemberName = ""
-  let isUpdatingMemberName = false
-  let updateMemberNameError: string | null = null
-  let isLoadingMemberDetails = false
-  let memberDetailError: string | null = null
-  let detailedMemberInfo: any = null
-
-  // Family creation
-  let familyName = ""
-  let isCreatingFamily = false
-  let createFamilyError: string | null = null
+  let memberToRemove: UserProfile | null = null
 
   onMount(() => {
     const unsubscribe = userStore.subscribe(async (value) => {
@@ -114,7 +90,7 @@
               }
             }
 
-            const newExtendedProfile = await databases.createDocument(
+            await databases.createDocument(
               DATABASE_ID,
               USERS_EXTENDED_COLLECTION_ID,
               ID.unique(),
@@ -211,354 +187,78 @@
     }
   }
 
-  // Event handlers for FamilyCreationForm
-  async function handleCreateFamily(
-    event: CustomEvent<{ familyName: string }>,
+  // Event handlers for components
+  function handleFamilyCreated(
+    event: CustomEvent<{ familyId: string; familyName: string }>,
   ) {
-    const { familyName: name } = event.detail
-
-    if (!name.trim()) {
-      createFamilyError = "Family name is required."
-      return
-    }
-    if (
-      !$userStore.currentUser ||
-      !$userStore.currentUser.$id ||
-      !$userStore.currentUser.$databaseId
-    ) {
-      createFamilyError =
-        "Current user data is incomplete. Cannot create family."
-      return
-    }
-
-    isCreatingFamily = true
-    createFamilyError = null
-
-    try {
-      const newTeam = await teams.create(ID.unique(), name.trim(), [
-        "owner",
-        "parent",
-      ])
-
-      await databases.updateDocument(
-        DATABASE_ID,
-        USERS_EXTENDED_COLLECTION_ID,
-        $userStore.currentUser.$databaseId,
-        { family_id: newTeam.$id },
-      )
-
-      await loadUser()
-      familyName = ""
-    } catch (err: any) {
-      console.error("Failed to create family:", err)
-      createFamilyError =
-        err.message || "An unknown error occurred while creating the family."
-    } finally {
-      isCreatingFamily = false
+    // Family creation is handled by the component, we just need to refresh
+    const { familyId } = event.detail
+    if (familyId) {
+      fetchFamilyMembers(familyId)
     }
   }
 
-  // Event handlers for AddMemberForm
   function handleStartAddingMember() {
     isAddingMember = true
-    newMemberEmail = ""
-    newMemberName = ""
-    newMemberRole = "child"
-    inviteMemberError = null
-    inviteMemberSuccess = null
   }
 
   function handleCancelAddingMember() {
     isAddingMember = false
-    newMemberEmail = ""
-    newMemberName = ""
-    newMemberRole = "child"
-    inviteMemberError = null
-    inviteMemberSuccess = null
   }
 
-  async function handleInviteMember(
+  function handleMemberInvited(
     event: CustomEvent<{
       email: string
       name: string
-      role: "parent" | "child"
+      role: string
+      membershipId: string
     }>,
   ) {
-    const { email, name, role } = event.detail
-
-    if (!email.trim()) {
-      inviteMemberError = "Email is required."
-      return
-    }
-
-    if (!$userStore.currentUser?.family_id) {
-      inviteMemberError = "No family context found."
-      return
-    }
-
-    isInvitingMember = true
-    inviteMemberError = null
-    inviteMemberSuccess = null
-
-    try {
-      const trimmedEmail = email.trim()
-      const teamRoles = [role]
-      const targetUrl = `${window.location.origin}/family/join?invitedRole=${role}`
-
-      const newMembership = await teams.createMembership(
-        $userStore.currentUser.family_id,
-        teamRoles,
-        trimmedEmail,
-        undefined,
-        undefined,
-        targetUrl,
-        name.trim() || undefined,
-      )
-
-      try {
-        await databases.createDocument(
-          DATABASE_ID,
-          USERS_EXTENDED_COLLECTION_ID,
-          ID.unique(),
-          {
-            user_id: newMembership.userId,
-            role: role,
-            family_id: $userStore.currentUser.family_id,
-            name: name.trim() || "",
-            email: trimmedEmail,
-          },
-        )
-      } catch (createError) {
-        console.warn("Failed to create users_extended document:", createError)
-      }
-
-      inviteMemberSuccess = `Invitation sent to ${trimmedEmail}${name ? ` (${name})` : ""} as ${role}!`
-
-      newMemberEmail = ""
-      newMemberName = ""
-
-      await fetchFamilyMembers($userStore.currentUser.family_id)
-    } catch (err: any) {
-      console.error("Failed to invite member:", err)
-      inviteMemberError =
-        err.message || "An unknown error occurred while sending the invitation."
-    } finally {
-      isInvitingMember = false
+    // Member invitation is handled by the component, we just need to refresh and close the form
+    isAddingMember = false
+    if ($userStore.currentUser?.family_id) {
+      fetchFamilyMembers($userStore.currentUser.family_id)
     }
   }
 
-  // Event handlers for MemberDetailModal
   function handleOpenMemberDetail(event: CustomEvent<UserProfile>) {
-    const member = event.detail
-    selectedMember = member
-    isEditingMemberName = false
-    editingMemberName = member.name || ""
-    updateMemberNameError = null
-    isLoadingMemberDetails = true
-    memberDetailError = null
-    detailedMemberInfo = null
-
-    fetchMemberDetails(member)
-  }
-
-  async function fetchMemberDetails(member: UserProfile) {
-    if (!$userStore.currentUser?.family_id) {
-      memberDetailError = "No family context found."
-      isLoadingMemberDetails = false
-      return
-    }
-
-    try {
-      if (member.$id === $userStore.currentUser.$id) {
-        try {
-          const currentUserAccount = await account.get()
-          detailedMemberInfo = {
-            email: currentUserAccount.email,
-            name: currentUserAccount.name,
-            userId: currentUserAccount.$id,
-            isCurrentUser: true,
-          }
-          isLoadingMemberDetails = false
-          return
-        } catch (accountError) {
-          console.warn("Could not get current user account info:", accountError)
-        }
-      }
-
-      const extendedProfile = await databases.listDocuments(
-        DATABASE_ID,
-        USERS_EXTENDED_COLLECTION_ID,
-        [Query.equal("user_id", member.$id)],
-      )
-
-      if (extendedProfile.documents.length > 0) {
-        const profile = extendedProfile.documents[0]
-        detailedMemberInfo = {
-          email: profile.email || "Email not available",
-          name: profile.name || member.name,
-          userId: member.$id,
-          role: profile.role,
-          isCurrentUser: false,
-        }
-      } else {
-        detailedMemberInfo = {
-          email: "Email not available",
-          name: member.name || "Name not available",
-          userId: member.$id,
-          role: member.role,
-          isCurrentUser: false,
-        }
-      }
-
-      isLoadingMemberDetails = false
-    } catch (error) {
-      console.error("Error fetching member details:", error)
-      memberDetailError = "Failed to load member details"
-      isLoadingMemberDetails = false
-    }
+    selectedMember = event.detail
   }
 
   function handleCloseMemberDetail() {
     selectedMember = null
-    isEditingMemberName = false
-    editingMemberName = ""
-    updateMemberNameError = null
-    isLoadingMemberDetails = false
-    memberDetailError = null
-    detailedMemberInfo = null
   }
 
-  function handleStartEditingMemberName() {
-    if (!selectedMember) return
-    isEditingMemberName = true
-    editingMemberName = selectedMember.name || ""
-    updateMemberNameError = null
-  }
-
-  function handleCancelEditingMemberName() {
-    if (!selectedMember) return
-    isEditingMemberName = false
-    editingMemberName = selectedMember.name || ""
-    updateMemberNameError = null
-  }
-
-  async function handleSaveMemberName(event: CustomEvent<{ name: string }>) {
-    const { name } = event.detail
-
-    if (!selectedMember || !name.trim()) {
-      updateMemberNameError = "Name is required."
-      return
-    }
-
-    if (!selectedMember.$databaseId) {
-      updateMemberNameError = "Member data not found."
-      return
-    }
-
-    isUpdatingMemberName = true
-    updateMemberNameError = null
-
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        USERS_EXTENDED_COLLECTION_ID,
-        selectedMember.$databaseId,
-        { name: name.trim() },
-      )
-
-      const memberIndex = familyMembers.findIndex(
-        (m) => m.$id === selectedMember!.$id,
-      )
-      if (memberIndex !== -1) {
-        familyMembers[memberIndex].name = name.trim()
-        familyMembers = [...familyMembers]
-        children = familyMembers.filter((member) => member.role === "child")
-      }
-
-      selectedMember!.name = name.trim()
-      isEditingMemberName = false
-    } catch (err: any) {
-      console.error("Failed to update member name:", err)
-      updateMemberNameError = err.message || "Failed to update name."
-    } finally {
-      isUpdatingMemberName = false
+  function handleMemberUpdated(
+    event: CustomEvent<{ member: UserProfile; updatedName: string }>,
+  ) {
+    // Update the member in our local list
+    const { member, updatedName } = event.detail
+    const memberIndex = familyMembers.findIndex((m) => m.$id === member.$id)
+    if (memberIndex !== -1) {
+      familyMembers[memberIndex].name = updatedName
+      familyMembers = [...familyMembers]
+      children = familyMembers.filter((member) => member.role === "child")
     }
   }
 
-  // Event handlers for RemoveMemberModal
-  function handleConfirmRemoveMember(member: UserProfile) {
-    memberToRemove = member
-    removeMemberError = null
+  function handleRemoveMemberRequest(event: CustomEvent<UserProfile>) {
+    memberToRemove = event.detail
   }
 
   function handleCancelRemoveMember() {
     memberToRemove = null
-    removeMemberError = null
   }
 
-  async function handleRemoveFamilyMember() {
-    if (!memberToRemove || !$userStore.currentUser?.family_id) {
-      removeMemberError = "Invalid member or family context."
-      return
+  function handleMemberRemoved(
+    event: CustomEvent<{ removedMember: UserProfile; membershipId: string }>,
+  ) {
+    // Member removal is handled by the component, we just need to refresh and close modals
+    memberToRemove = null
+    selectedMember = null
+    if ($userStore.currentUser?.family_id) {
+      fetchFamilyMembers($userStore.currentUser.family_id)
     }
-
-    if (memberToRemove.$id === $userStore.currentUser.$id) {
-      removeMemberError = "You cannot remove yourself from the family."
-      return
-    }
-
-    isRemovingMember = true
-    removeMemberError = null
-
-    try {
-      const memberships = await teams.listMemberships(
-        $userStore.currentUser.family_id,
-      )
-      const membershipToRemove = memberships.memberships.find(
-        (m) => m.userId === memberToRemove!.$id,
-      )
-
-      if (!membershipToRemove) {
-        throw new Error("Membership not found for this user.")
-      }
-
-      await teams.deleteMembership(
-        $userStore.currentUser.family_id,
-        membershipToRemove.$id,
-      )
-
-      if (memberToRemove && memberToRemove.$databaseId) {
-        try {
-          await databases.updateDocument(
-            DATABASE_ID,
-            USERS_EXTENDED_COLLECTION_ID,
-            memberToRemove.$databaseId,
-            { family_id: null },
-          )
-        } catch (updateError) {
-          console.warn("Failed to update users_extended document:", updateError)
-        }
-      }
-
-      await fetchFamilyMembers($userStore.currentUser.family_id)
-      memberToRemove = null
-
-      if (selectedMember) {
-        handleCloseMemberDetail()
-      }
-    } catch (err: any) {
-      console.error("Failed to remove family member:", err)
-      removeMemberError =
-        err.message ||
-        "An unknown error occurred while removing the family member."
-    } finally {
-      isRemovingMember = false
-    }
-  }
-
-  function handleRemoveMemberFromModal() {
-    if (!selectedMember) return
-    handleConfirmRemoveMember(selectedMember)
   }
 </script>
 
@@ -579,22 +279,11 @@
     </div>
 
     {#if !$userStore.currentUser.family_id}
-      <FamilyCreationForm
-        bind:familyName
-        bind:isCreatingFamily
-        bind:createFamilyError
-        on:createFamily={handleCreateFamily}
-      />
+      <FamilyCreationForm on:familyCreated={handleFamilyCreated} />
     {:else}
       {#if isAddingMember}
         <AddMemberForm
-          bind:newMemberEmail
-          bind:newMemberName
-          bind:newMemberRole
-          bind:isInvitingMember
-          bind:inviteMemberError
-          bind:inviteMemberSuccess
-          on:inviteMember={handleInviteMember}
+          on:memberInvited={handleMemberInvited}
           on:cancel={handleCancelAddingMember}
         />
       {/if}
@@ -617,25 +306,14 @@
 <!-- Modals -->
 <RemoveMemberModal
   {memberToRemove}
-  {isRemovingMember}
-  {removeMemberError}
   on:cancel={handleCancelRemoveMember}
-  on:confirm={handleRemoveFamilyMember}
+  on:memberRemoved={handleMemberRemoved}
 />
 
 <MemberDetailModal
   {selectedMember}
   currentUserId={$userStore.currentUser?.$id}
-  {isEditingMemberName}
-  bind:editingMemberName
-  {isUpdatingMemberName}
-  {updateMemberNameError}
-  {isLoadingMemberDetails}
-  {memberDetailError}
-  {detailedMemberInfo}
   on:close={handleCloseMemberDetail}
-  on:startEditingName={handleStartEditingMemberName}
-  on:cancelEditingName={handleCancelEditingMemberName}
-  on:saveName={handleSaveMemberName}
-  on:removeMember={handleRemoveMemberFromModal}
+  on:memberUpdated={handleMemberUpdated}
+  on:removeMember={handleRemoveMemberRequest}
 />

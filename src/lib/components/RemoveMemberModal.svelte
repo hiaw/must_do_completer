@@ -1,19 +1,89 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
   import type { UserProfile } from "$lib/stores/userStore"
+  import { userStore } from "$lib/stores/userStore"
+  import { teams, databases } from "$lib/appwrite"
 
   const dispatch = createEventDispatcher()
 
+  // Constants
+  const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
+  const USERS_EXTENDED_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_USERS_EXTENDED_COLLECTION_ID ||
+    "users_extended"
+
   export let memberToRemove: UserProfile | null = null
-  export let isRemovingMember = false
-  export let removeMemberError: string | null = null
+
+  let isRemovingMember = false
+  let removeMemberError: string | null = null
 
   function handleCancel() {
+    memberToRemove = null
+    removeMemberError = null
     dispatch("cancel")
   }
 
-  function handleConfirm() {
-    dispatch("confirm")
+  async function handleConfirm() {
+    if (!memberToRemove || !$userStore.currentUser?.family_id) {
+      removeMemberError = "Invalid member or family context."
+      return
+    }
+
+    if (memberToRemove.$id === $userStore.currentUser.$id) {
+      removeMemberError = "You cannot remove yourself from the family."
+      return
+    }
+
+    isRemovingMember = true
+    removeMemberError = null
+
+    try {
+      const memberships = await teams.listMemberships(
+        $userStore.currentUser.family_id,
+      )
+      const membershipToRemove = memberships.memberships.find(
+        (m) => m.userId === memberToRemove!.$id,
+      )
+
+      if (!membershipToRemove) {
+        throw new Error("Membership not found for this user.")
+      }
+
+      await teams.deleteMembership(
+        $userStore.currentUser.family_id,
+        membershipToRemove.$id,
+      )
+
+      if (memberToRemove && memberToRemove.$databaseId) {
+        try {
+          await databases.updateDocument(
+            DATABASE_ID,
+            USERS_EXTENDED_COLLECTION_ID,
+            memberToRemove.$databaseId,
+            { family_id: null },
+          )
+        } catch (updateError) {
+          console.warn("Failed to update users_extended document:", updateError)
+        }
+      }
+
+      // Notify parent component of successful removal
+      dispatch("memberRemoved", {
+        removedMember: memberToRemove,
+        membershipId: membershipToRemove.$id,
+      })
+
+      // Reset state
+      memberToRemove = null
+      removeMemberError = null
+    } catch (err: any) {
+      console.error("Failed to remove family member:", err)
+      removeMemberError =
+        err.message ||
+        "An unknown error occurred while removing the family member."
+    } finally {
+      isRemovingMember = false
+    }
   }
 </script>
 

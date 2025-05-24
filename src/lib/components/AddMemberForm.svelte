@@ -1,24 +1,102 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
+  import { userStore } from "$lib/stores/userStore"
+  import { teams, databases } from "$lib/appwrite"
+  import { ID } from "appwrite"
 
   const dispatch = createEventDispatcher()
 
-  export let newMemberEmail = ""
-  export let newMemberName = ""
-  export let newMemberRole: "parent" | "child" = "child"
-  export let isInvitingMember = false
-  export let inviteMemberError: string | null = null
-  export let inviteMemberSuccess: string | null = null
+  // Constants
+  const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
+  const USERS_EXTENDED_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_USERS_EXTENDED_COLLECTION_ID ||
+    "users_extended"
 
-  function handleInvite() {
-    dispatch("inviteMember", {
-      email: newMemberEmail,
-      name: newMemberName,
-      role: newMemberRole,
-    })
+  let newMemberEmail = ""
+  let newMemberName = ""
+  let newMemberRole: "parent" | "child" = "child"
+  let isInvitingMember = false
+  let inviteMemberError: string | null = null
+  let inviteMemberSuccess: string | null = null
+
+  async function handleInvite() {
+    if (!newMemberEmail.trim()) {
+      inviteMemberError = "Email is required."
+      return
+    }
+
+    const currentUser = $userStore.currentUser
+    if (!currentUser?.family_id) {
+      inviteMemberError = "No family context found."
+      return
+    }
+
+    isInvitingMember = true
+    inviteMemberError = null
+    inviteMemberSuccess = null
+
+    try {
+      const trimmedEmail = newMemberEmail.trim()
+      const teamRoles = [newMemberRole]
+      const targetUrl = `${window.location.origin}/family/join?invitedRole=${newMemberRole}`
+
+      const newMembership = await teams.createMembership(
+        currentUser.family_id,
+        teamRoles,
+        trimmedEmail,
+        undefined,
+        undefined,
+        targetUrl,
+        newMemberName.trim() || undefined,
+      )
+
+      try {
+        await databases.createDocument(
+          DATABASE_ID,
+          USERS_EXTENDED_COLLECTION_ID,
+          ID.unique(),
+          {
+            user_id: newMembership.userId,
+            role: newMemberRole,
+            family_id: currentUser.family_id,
+            name: newMemberName.trim() || "",
+            email: trimmedEmail,
+          },
+        )
+      } catch (createError) {
+        console.warn("Failed to create users_extended document:", createError)
+      }
+
+      inviteMemberSuccess = `Invitation sent to ${trimmedEmail}${newMemberName ? ` (${newMemberName})` : ""} as ${newMemberRole}!`
+
+      // Notify parent component of successful invitation
+      dispatch("memberInvited", {
+        email: trimmedEmail,
+        name: newMemberName.trim(),
+        role: newMemberRole,
+        membershipId: newMembership.$id,
+      })
+
+      // Reset form
+      newMemberEmail = ""
+      newMemberName = ""
+      newMemberRole = "child"
+    } catch (err: any) {
+      console.error("Failed to invite member:", err)
+      inviteMemberError =
+        err.message || "An unknown error occurred while sending the invitation."
+    } finally {
+      isInvitingMember = false
+    }
   }
 
   function handleCancel() {
+    // Reset form and notify parent
+    newMemberEmail = ""
+    newMemberName = ""
+    newMemberRole = "child"
+    inviteMemberError = null
+    inviteMemberSuccess = null
     dispatch("cancel")
   }
 </script>

@@ -1,14 +1,67 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
+  import { userStore, loadUser } from "$lib/stores/userStore"
+  import { teams, databases } from "$lib/appwrite"
+  import { ID } from "appwrite"
 
   const dispatch = createEventDispatcher()
 
-  export let familyName = ""
-  export let isCreatingFamily = false
-  export let createFamilyError: string | null = null
+  // Constants
+  const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
+  const USERS_EXTENDED_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_USERS_EXTENDED_COLLECTION_ID ||
+    "users_extended"
 
-  function handleSubmit() {
-    dispatch("createFamily", { familyName })
+  let familyName = ""
+  let isCreatingFamily = false
+  let createFamilyError: string | null = null
+
+  async function handleSubmit() {
+    if (!familyName.trim()) {
+      createFamilyError = "Family name is required."
+      return
+    }
+
+    const currentUser = $userStore.currentUser
+    if (!currentUser || !currentUser.$id || !currentUser.$databaseId) {
+      createFamilyError =
+        "Current user data is incomplete. Cannot create family."
+      return
+    }
+
+    isCreatingFamily = true
+    createFamilyError = null
+
+    try {
+      const newTeam = await teams.create(ID.unique(), familyName.trim(), [
+        "owner",
+        "parent",
+      ])
+
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        currentUser.$databaseId,
+        { family_id: newTeam.$id },
+      )
+
+      await loadUser()
+
+      // Notify parent component of successful creation
+      dispatch("familyCreated", {
+        familyId: newTeam.$id,
+        familyName: familyName.trim(),
+      })
+
+      // Reset form
+      familyName = ""
+    } catch (err: any) {
+      console.error("Failed to create family:", err)
+      createFamilyError =
+        err.message || "An unknown error occurred while creating the family."
+    } finally {
+      isCreatingFamily = false
+    }
   }
 </script>
 

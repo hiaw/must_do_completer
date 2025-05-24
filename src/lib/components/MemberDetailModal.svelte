@@ -1,37 +1,171 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
+  import { createEventDispatcher, onMount } from "svelte"
   import type { UserProfile } from "$lib/stores/userStore"
+  import { userStore } from "$lib/stores/userStore"
+  import { databases, account } from "$lib/appwrite"
+  import { Query } from "appwrite"
 
   const dispatch = createEventDispatcher()
 
+  // Constants
+  const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
+  const USERS_EXTENDED_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_USERS_EXTENDED_COLLECTION_ID ||
+    "users_extended"
+
   export let selectedMember: UserProfile | null = null
   export let currentUserId: string | undefined = undefined
-  export let isEditingMemberName = false
-  export let editingMemberName = ""
-  export let isUpdatingMemberName = false
-  export let updateMemberNameError: string | null = null
-  export let isLoadingMemberDetails = false
-  export let memberDetailError: string | null = null
-  export let detailedMemberInfo: any = null
+
+  let isEditingMemberName = false
+  let editingMemberName = ""
+  let isUpdatingMemberName = false
+  let updateMemberNameError: string | null = null
+  let isLoadingMemberDetails = false
+  let memberDetailError: string | null = null
+  let detailedMemberInfo: any = null
+
+  // Watch for changes to selectedMember and fetch details
+  $: if (selectedMember) {
+    fetchMemberDetails(selectedMember)
+    editingMemberName = selectedMember.name || ""
+    isEditingMemberName = false
+    updateMemberNameError = null
+  }
+
+  async function fetchMemberDetails(member: UserProfile) {
+    if (!$userStore.currentUser?.family_id) {
+      memberDetailError = "No family context found."
+      isLoadingMemberDetails = false
+      return
+    }
+
+    isLoadingMemberDetails = true
+    memberDetailError = null
+    detailedMemberInfo = null
+
+    try {
+      if (member.$id === $userStore.currentUser.$id) {
+        try {
+          const currentUserAccount = await account.get()
+          detailedMemberInfo = {
+            email: currentUserAccount.email,
+            name: currentUserAccount.name,
+            userId: currentUserAccount.$id,
+            isCurrentUser: true,
+          }
+          isLoadingMemberDetails = false
+          return
+        } catch (accountError) {
+          console.warn("Could not get current user account info:", accountError)
+        }
+      }
+
+      const extendedProfile = await databases.listDocuments(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        [Query.equal("user_id", member.$id)],
+      )
+
+      if (extendedProfile.documents.length > 0) {
+        const profile = extendedProfile.documents[0]
+        detailedMemberInfo = {
+          email: profile.email || "Email not available",
+          name: profile.name || member.name,
+          userId: member.$id,
+          role: profile.role,
+          isCurrentUser: false,
+        }
+      } else {
+        detailedMemberInfo = {
+          email: "Email not available",
+          name: member.name || "Name not available",
+          userId: member.$id,
+          role: member.role,
+          isCurrentUser: false,
+        }
+      }
+
+      isLoadingMemberDetails = false
+    } catch (error) {
+      console.error("Error fetching member details:", error)
+      memberDetailError = "Failed to load member details"
+      isLoadingMemberDetails = false
+    }
+  }
 
   function handleClose() {
+    selectedMember = null
+    isEditingMemberName = false
+    editingMemberName = ""
+    updateMemberNameError = null
+    isLoadingMemberDetails = false
+    memberDetailError = null
+    detailedMemberInfo = null
     dispatch("close")
   }
 
   function handleStartEditingName() {
-    dispatch("startEditingName")
+    if (!selectedMember) return
+    isEditingMemberName = true
+    editingMemberName = selectedMember.name || ""
+    updateMemberNameError = null
   }
 
   function handleCancelEditingName() {
-    dispatch("cancelEditingName")
+    if (!selectedMember) return
+    isEditingMemberName = false
+    editingMemberName = selectedMember.name || ""
+    updateMemberNameError = null
   }
 
-  function handleSaveName() {
-    dispatch("saveName", { name: editingMemberName })
+  async function handleSaveName() {
+    if (!selectedMember || !editingMemberName.trim()) {
+      updateMemberNameError = "Name is required."
+      return
+    }
+
+    if (!selectedMember.$databaseId) {
+      updateMemberNameError = "Member data not found."
+      return
+    }
+
+    isUpdatingMemberName = true
+    updateMemberNameError = null
+
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        selectedMember.$databaseId,
+        { name: editingMemberName.trim() },
+      )
+
+      // Update the selected member locally
+      selectedMember.name = editingMemberName.trim()
+
+      // Update detailed member info if available
+      if (detailedMemberInfo) {
+        detailedMemberInfo.name = editingMemberName.trim()
+      }
+
+      isEditingMemberName = false
+
+      // Notify parent component of the update
+      dispatch("memberUpdated", {
+        member: selectedMember,
+        updatedName: editingMemberName.trim(),
+      })
+    } catch (err: any) {
+      console.error("Failed to update member name:", err)
+      updateMemberNameError = err.message || "Failed to update name."
+    } finally {
+      isUpdatingMemberName = false
+    }
   }
 
   function handleRemoveMember() {
-    dispatch("removeMember")
+    if (!selectedMember) return
+    dispatch("removeMember", selectedMember)
   }
 </script>
 
