@@ -16,12 +16,6 @@
   let isLoadingFamily = true
   let familyError: string | null = null
 
-  // Child name editing
-  let editingChildId: string | null = null
-  let editingChildName = ""
-  let isUpdatingChildName = false
-  let updateNameError: string | null = null
-
   // Add family member functionality
   let isAddingMember = false
   let newMemberEmail = ""
@@ -35,6 +29,16 @@
   let memberToRemove: UserProfile | null = null
   let isRemovingMember = false
   let removeMemberError: string | null = null
+
+  // Member detail modal functionality
+  let selectedMember: UserProfile | null = null
+  let isEditingMemberName = false
+  let editingMemberName = ""
+  let isUpdatingMemberName = false
+  let updateMemberNameError: string | null = null
+  let isLoadingMemberDetails = false
+  let memberDetailError: string | null = null
+  let detailedMemberInfo: any = null
 
   // Family creation
   let familyName = ""
@@ -82,6 +86,7 @@
           familyTeamId,
           membership.$id,
         )
+
         const extendedProfile = userProfilesResponse.documents.find(
           (doc) => doc.user_id === membership.userId,
         )
@@ -89,11 +94,7 @@
         let memberName =
           extendedProfile?.name || appwriteUser.userName || membership.userName
 
-        if (
-          !extendedProfile &&
-          membership.userName &&
-          membership.status === "pending"
-        ) {
+        if (!extendedProfile && membership.userName) {
           try {
             const newExtendedProfile = await databases.createDocument(
               DATABASE_ID,
@@ -104,6 +105,7 @@
                 role: membership.roles.includes("child") ? "child" : "parent",
                 family_id: familyTeamId,
                 name: membership.userName,
+                email: appwriteUser.userEmail || "No email available",
               },
             )
             memberName = membership.userName
@@ -119,6 +121,8 @@
         const hasExtendedProfile = !!extendedProfile
         const needsNameSync =
           teamMembershipName && hasExtendedProfile && !extendedProfile.name
+        const needsEmailSync =
+          hasExtendedProfile && !extendedProfile.email && appwriteUser.userEmail
 
         if (needsNameSync && extendedProfile) {
           try {
@@ -138,12 +142,36 @@
           }
         }
 
+        // Sync email if missing
+        if (needsEmailSync && extendedProfile) {
+          try {
+            await databases.updateDocument(
+              DATABASE_ID,
+              USERS_EXTENDED_COLLECTION_ID,
+              extendedProfile.$id,
+              { email: appwriteUser.userEmail },
+            )
+            extendedProfile.email = appwriteUser.userEmail
+          } catch (syncError) {
+            console.warn(
+              `Failed to sync email for user ${membership.userId}:`,
+              syncError,
+            )
+          }
+        }
+
         const finalName = memberName || "Unnamed User"
+
+        // Try different possible email property names
+        const memberEmail =
+          extendedProfile?.email ||
+          appwriteUser.userEmail ||
+          "No email available"
 
         detailedMembers.push({
           $id: membership.userId,
           name: finalName,
-          email: appwriteUser.userEmail,
+          email: memberEmail,
           prefs: {}, // Placeholder
           role:
             (extendedProfile?.role as "parent" | "child") ||
@@ -211,60 +239,6 @@
     }
   }
 
-  function startEditingChildName(child: UserProfile) {
-    editingChildId = child.$id
-    editingChildName = child.name || ""
-    updateNameError = null
-  }
-
-  function cancelEditingChildName() {
-    editingChildId = null
-    editingChildName = ""
-    updateNameError = null
-  }
-
-  async function saveChildName() {
-    if (!editingChildId || !editingChildName.trim()) {
-      updateNameError = "Name is required."
-      return
-    }
-
-    const child = familyMembers.find((m) => m.$id === editingChildId)
-    if (!child || !child.$databaseId) {
-      updateNameError = "Child data not found."
-      return
-    }
-
-    isUpdatingChildName = true
-    updateNameError = null
-
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        USERS_EXTENDED_COLLECTION_ID,
-        child.$databaseId,
-        { name: editingChildName.trim() },
-      )
-
-      const childIndex = familyMembers.findIndex(
-        (m) => m.$id === editingChildId,
-      )
-      if (childIndex !== -1) {
-        familyMembers[childIndex].name = editingChildName.trim()
-        familyMembers = [...familyMembers]
-        children = familyMembers.filter((member) => member.role === "child")
-      }
-
-      editingChildId = null
-      editingChildName = ""
-    } catch (err: any) {
-      console.error("Failed to update child name:", err)
-      updateNameError = err.message || "Failed to update name."
-    } finally {
-      isUpdatingChildName = false
-    }
-  }
-
   function startAddingMember() {
     isAddingMember = true
     newMemberEmail = ""
@@ -324,6 +298,24 @@
               role: newMemberRole,
               family_id: $userStore.currentUser.family_id,
               name: newMemberName.trim(),
+              email: trimmedEmail,
+            },
+          )
+        } catch (createError) {
+          console.warn("Failed to create users_extended document:", createError)
+        }
+      } else {
+        // Even if no name is provided, create the document with email
+        try {
+          await databases.createDocument(
+            DATABASE_ID,
+            USERS_EXTENDED_COLLECTION_ID,
+            ID.unique(),
+            {
+              user_id: newMembership.userId,
+              role: newMemberRole,
+              family_id: $userStore.currentUser.family_id,
+              email: trimmedEmail,
             },
           )
         } catch (createError) {
@@ -377,7 +369,7 @@
         $userStore.currentUser.family_id,
       )
       const membershipToRemove = memberships.memberships.find(
-        (m) => m.userId === memberToRemove.$id,
+        (m) => m.userId === memberToRemove!.$id,
       )
 
       if (!membershipToRemove) {
@@ -418,6 +410,128 @@
     } finally {
       isRemovingMember = false
     }
+  }
+
+  function openMemberDetail(member: UserProfile) {
+    selectedMember = member
+    isEditingMemberName = false
+    editingMemberName = member.name || ""
+    updateMemberNameError = null
+    isLoadingMemberDetails = true
+    memberDetailError = null
+    detailedMemberInfo = null
+
+    // Fetch detailed member information
+    fetchMemberDetails(member)
+  }
+
+  async function fetchMemberDetails(member: UserProfile) {
+    if (!$userStore.currentUser?.family_id) {
+      memberDetailError = "No family context found."
+      isLoadingMemberDetails = false
+      return
+    }
+
+    try {
+      // Get the membership details which should include more user information
+      const memberships = await teams.listMemberships(
+        $userStore.currentUser.family_id,
+      )
+      const membershipData = memberships.memberships.find(
+        (m) => m.userId === member.$id,
+      )
+
+      if (membershipData) {
+        // Get detailed membership information
+        const detailedMembership = await teams.getMembership(
+          $userStore.currentUser.family_id,
+          membershipData.$id,
+        )
+        console.log("Detailed membership info:", detailedMembership)
+        detailedMemberInfo = detailedMembership
+      } else {
+        memberDetailError = "Member not found in team."
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch member details:", err)
+      memberDetailError = err.message || "Failed to load member details."
+    } finally {
+      isLoadingMemberDetails = false
+    }
+  }
+
+  function closeMemberDetail() {
+    selectedMember = null
+    isEditingMemberName = false
+    editingMemberName = ""
+    updateMemberNameError = null
+    isLoadingMemberDetails = false
+    memberDetailError = null
+    detailedMemberInfo = null
+  }
+
+  function startEditingMemberName() {
+    if (!selectedMember) return
+    isEditingMemberName = true
+    editingMemberName = selectedMember.name || ""
+    updateMemberNameError = null
+  }
+
+  function cancelEditingMemberName() {
+    if (!selectedMember) return
+    isEditingMemberName = false
+    editingMemberName = selectedMember.name || ""
+    updateMemberNameError = null
+  }
+
+  async function saveMemberName() {
+    if (!selectedMember || !editingMemberName.trim()) {
+      updateMemberNameError = "Name is required."
+      return
+    }
+
+    if (!selectedMember.$databaseId) {
+      updateMemberNameError = "Member data not found."
+      return
+    }
+
+    isUpdatingMemberName = true
+    updateMemberNameError = null
+
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        selectedMember.$databaseId,
+        { name: editingMemberName.trim() },
+      )
+
+      // Update the member in the list
+      const memberIndex = familyMembers.findIndex(
+        (m) => m.$id === selectedMember!.$id,
+      )
+      if (memberIndex !== -1) {
+        familyMembers[memberIndex].name = editingMemberName.trim()
+        familyMembers = [...familyMembers]
+        children = familyMembers.filter((member) => member.role === "child")
+      }
+
+      // Update the selected member
+      selectedMember!.name = editingMemberName.trim()
+      isEditingMemberName = false
+    } catch (err: any) {
+      console.error("Failed to update member name:", err)
+      updateMemberNameError = err.message || "Failed to update name."
+    } finally {
+      isUpdatingMemberName = false
+    }
+  }
+
+  function confirmRemoveMemberFromModal() {
+    if (!selectedMember) return
+    memberToRemove = selectedMember
+    removeMemberError = null
+    // Keep the detail modal open, the remove confirmation will overlay it
   }
 </script>
 
@@ -573,10 +687,16 @@
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {#each familyMembers as member (member.$id)}
               <div
-                class="border border-gray-300 rounded-lg p-6 bg-white shadow-sm {member.role ===
+                class="border border-gray-300 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer {member.role ===
                 'parent'
                   ? 'border-l-4 border-l-blue-600'
                   : 'border-l-4 border-l-green-600'}"
+                on:click={() => openMemberDetail(member)}
+                on:keydown={(e) =>
+                  e.key === "Enter" && openMemberDetail(member)}
+                tabindex="0"
+                role="button"
+                aria-label="View details for {member.name || member.email}"
               >
                 <div class="flex justify-end mb-4">
                   <span
@@ -589,67 +709,14 @@
                   </span>
                 </div>
 
-                {#if member.role === "child" && editingChildId === member.$id}
-                  <div class="flex flex-col gap-4">
-                    <input
-                      type="text"
-                      bind:value={editingChildName}
-                      placeholder="Enter child's name"
-                      disabled={isUpdatingChildName}
-                      class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <div class="flex gap-2">
-                      <button
-                        type="button"
-                        on:click={saveChildName}
-                        disabled={isUpdatingChildName}
-                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
-                      >
-                        {#if isUpdatingChildName}Saving...{:else}Save{/if}
-                      </button>
-                      <button
-                        type="button"
-                        on:click={cancelEditingChildName}
-                        disabled={isUpdatingChildName}
-                        class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    {#if updateNameError}
-                      <p class="text-red-600 text-sm">{updateNameError}</p>
-                    {/if}
-                  </div>
-                {:else}
-                  <div class="flex justify-between items-center">
-                    <div class="flex flex-col gap-2">
-                      <span class="font-bold text-lg text-gray-800">
-                        {member.name || "Unnamed User"}
-                      </span>
-                      <span class="text-gray-600 text-sm">{member.email}</span>
-                    </div>
-                    <div class="flex gap-2">
-                      {#if member.role === "child"}
-                        <button
-                          type="button"
-                          on:click={() => startEditingChildName(member)}
-                          class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
-                        >
-                          {member.name ? "Edit Name" : "Set Name"}
-                        </button>
-                      {/if}
-                      {#if member.$id !== $userStore.currentUser?.$id}
-                        <button
-                          type="button"
-                          on:click={() => confirmRemoveMember(member)}
-                          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-                        >
-                          Remove
-                        </button>
-                      {/if}
-                    </div>
-                  </div>
-                {/if}
+                <div class="flex flex-col gap-2">
+                  <span class="font-bold text-lg text-gray-800">
+                    {member.name || "Unnamed User"}
+                  </span>
+                  <span class="text-gray-500 text-xs mt-2"
+                    >Click to view details</span
+                  >
+                </div>
               </div>
             {/each}
           </div>
@@ -708,6 +775,162 @@
         >
           {#if isRemovingMember}Removing...{:else}Remove Member{/if}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Member Detail Modal -->
+{#if selectedMember}
+  <div
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40"
+  >
+    <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-xl font-bold text-gray-800">Member Details</h3>
+        <button
+          type="button"
+          on:click={closeMemberDetail}
+          class="text-gray-500 hover:text-gray-700 text-2xl"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="space-y-4 mb-6">
+        <!-- Role Badge -->
+        <div class="flex justify-center">
+          <span
+            class="px-4 py-2 rounded-full text-sm font-bold uppercase text-white {selectedMember.role ===
+            'parent'
+              ? 'bg-blue-600'
+              : 'bg-green-600'}"
+          >
+            {selectedMember.role}
+          </span>
+        </div>
+
+        <!-- Name Section -->
+        <div class="space-y-2">
+          <div class="block text-sm font-bold text-gray-700">Name:</div>
+          {#if isEditingMemberName}
+            <div class="space-y-2">
+              <input
+                type="text"
+                bind:value={editingMemberName}
+                placeholder="Enter member's name"
+                disabled={isUpdatingMemberName}
+                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  on:click={saveMemberName}
+                  disabled={isUpdatingMemberName}
+                  class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
+                >
+                  {#if isUpdatingMemberName}Saving...{:else}Save{/if}
+                </button>
+                <button
+                  type="button"
+                  on:click={cancelEditingMemberName}
+                  disabled={isUpdatingMemberName}
+                  class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              {#if updateMemberNameError}
+                <p class="text-red-600 text-sm">{updateMemberNameError}</p>
+              {/if}
+            </div>
+          {:else}
+            <div class="flex justify-between items-center">
+              <span class="text-gray-800 font-medium">
+                {selectedMember.name || "No name set"}
+              </span>
+              <button
+                type="button"
+                on:click={startEditingMemberName}
+                class="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+              >
+                {selectedMember.name ? "Edit" : "Set Name"}
+              </button>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Email Section -->
+        <div class="space-y-2">
+          <div class="block text-sm font-bold text-gray-700">Email:</div>
+          {#if isLoadingMemberDetails}
+            <div class="text-gray-500 text-sm">Loading...</div>
+          {:else if memberDetailError}
+            <div class="text-red-600 text-sm">{memberDetailError}</div>
+          {:else if detailedMemberInfo}
+            <span class="text-gray-800"
+              >{detailedMemberInfo.userEmail ||
+                detailedMemberInfo.email ||
+                "No email available"}</span
+            >
+          {:else}
+            <span class="text-gray-500">No email information available</span>
+          {/if}
+        </div>
+
+        <!-- Additional Member Information -->
+        {#if detailedMemberInfo && !isLoadingMemberDetails}
+          <!-- Join Date -->
+          {#if detailedMemberInfo.$createdAt}
+            <div class="space-y-2">
+              <div class="block text-sm font-bold text-gray-700">Joined:</div>
+              <span class="text-gray-800 text-sm"
+                >{new Date(
+                  detailedMemberInfo.$createdAt,
+                ).toLocaleDateString()}</span
+              >
+            </div>
+          {/if}
+
+          <!-- Membership Status -->
+          {#if detailedMemberInfo.confirm !== undefined}
+            <div class="space-y-2">
+              <div class="block text-sm font-bold text-gray-700">Status:</div>
+              <span class="text-gray-800 text-sm capitalize">
+                {detailedMemberInfo.confirm ? "Active" : "Pending Invitation"}
+              </span>
+            </div>
+          {/if}
+        {/if}
+
+        <!-- Member ID (for debugging/admin purposes) -->
+        <div class="space-y-2">
+          <div class="block text-sm font-bold text-gray-700">Member ID:</div>
+          <span class="text-gray-600 text-xs font-mono"
+            >{selectedMember.$id}</span
+          >
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-4 justify-end pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          on:click={closeMemberDetail}
+          class="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+        >
+          Close
+        </button>
+        {#if selectedMember.$id !== $userStore.currentUser?.$id}
+          <button
+            type="button"
+            on:click={confirmRemoveMemberFromModal}
+            class="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Remove Member
+          </button>
+        {/if}
       </div>
     </div>
   </div>
