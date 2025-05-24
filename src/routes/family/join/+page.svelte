@@ -46,19 +46,12 @@
 
 </script>
 
-<div>
+<div class="max-w-2xl mx-auto mt-16 p-8 text-center">
   {#if message}
-    <p>{message}</p>
+    <p class="text-lg text-gray-700 mb-4">{message}</p>
   {/if}
   {#if error}
-    <p style="color: red;">Error: {error}</p>
-    <p>If the problem persists, please contact support or <a href="/login">try logging in</a>.</p>
+    <p class="text-red-600 mb-4">Error: {error}</p>
+    <p class="text-gray-600">If the problem persists, please contact support or <a href="/login" class="text-blue-600 hover:underline">try logging in</a>.</p>
   {/if}
-</div>
-
-<style>
-  div {
-    padding: 2rem;
-    text-align: center;
-  }
-</style> 
+</div> 

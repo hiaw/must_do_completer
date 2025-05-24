@@ -320,40 +320,51 @@
 </script>
 
 {#if $userStore.loading}
-  <p>Loading user data...</p>
+  <p class="text-center text-gray-600">Loading user data...</p>
 {:else if $userStore.currentUser && $userStore.currentUser.role === "parent"}
-  <div class="family-page">
-    <div class="page-header">
-      <h1>Family Management</h1>
-      <a href="/parent/dashboard" class="back-link">← Back to Dashboard</a>
+  <div class="max-w-6xl mx-auto p-8">
+    <div class="flex justify-between items-center mb-8 pb-4 border-b-2 border-gray-200">
+      <h1 class="text-3xl font-bold text-gray-800">Family Management</h1>
+      <a href="/parent/dashboard" class="text-blue-600 hover:underline font-medium">← Back to Dashboard</a>
     </div>
 
     {#if !$userStore.currentUser.family_id}
-      <section class="family-creation-section">
-        <h2>Create Your Family Group</h2>
-        <p>To start managing tasks, you need to create a family group.</p>
-        <form on:submit|preventDefault={handleCreateFamily}>
-          <div>
-            <label for="familyName">Family Name:</label>
-            <input type="text" id="familyName" bind:value={familyName} required disabled={isCreatingFamily} />
+      <section class="bg-gray-50 border border-gray-300 rounded-lg p-8 text-center">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Create Your Family Group</h2>
+        <p class="text-gray-600 mb-8">To start managing tasks, you need to create a family group.</p>
+        <form on:submit|preventDefault={handleCreateFamily} class="max-w-md mx-auto">
+          <div class="mb-4 text-left">
+            <label for="familyName" class="block mb-2 font-bold text-gray-700">Family Name:</label>
+            <input 
+              type="text" 
+              id="familyName" 
+              bind:value={familyName} 
+              required 
+              disabled={isCreatingFamily}
+              class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-          <button type="submit" disabled={isCreatingFamily}>
+          <button 
+            type="submit" 
+            disabled={isCreatingFamily}
+            class="w-full px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+          >
             {#if isCreatingFamily}Creating...{:else}Create Family{/if}
           </button>
           {#if createFamilyError}
-            <p class="error-text">{createFamilyError}</p>
+            <p class="text-red-600 text-sm mt-2">{createFamilyError}</p>
           {/if}
         </form>
       </section>
     {:else}
-      <section class="family-members-section">
-        <div class="section-header">
-          <h2>Family Members</h2>
+      <section class="bg-white">
+        <div class="flex justify-between items-center mb-8">
+          <h2 class="text-2xl font-semibold text-gray-800">Family Members</h2>
           {#if !isAddingChild}
             <button 
               type="button" 
               on:click={startAddingChild}
-              class="add-child-btn"
+              class="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-bold"
             >
               + Add Child
             </button>
@@ -361,11 +372,11 @@
         </div>
 
         {#if isAddingChild}
-          <div class="add-child-form">
-            <h3>Invite New Child</h3>
-            <div class="form-fields">
-              <div>
-                <label for="newChildEmail">Child's Email:</label>
+          <div class="bg-gray-50 border border-gray-300 rounded-lg p-8 mb-8">
+            <h3 class="text-xl font-semibold text-gray-800 mb-6">Invite New Child</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div class="flex flex-col gap-2">
+                <label for="newChildEmail" class="font-bold text-gray-700">Child's Email:</label>
                 <input 
                   type="email" 
                   id="newChildEmail"
@@ -373,25 +384,27 @@
                   placeholder="child@example.com"
                   disabled={isInvitingChild}
                   required
+                  class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div>
-                <label for="newChildName">Child's Name (optional):</label>
+              <div class="flex flex-col gap-2">
+                <label for="newChildName" class="font-bold text-gray-700">Child's Name (optional):</label>
                 <input 
                   type="text" 
                   id="newChildName"
                   bind:value={newChildName} 
                   placeholder="e.g., Emma, Jake"
                   disabled={isInvitingChild}
+                  class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
-            <div class="edit-buttons">
+            <div class="flex gap-2">
               <button 
                 type="button" 
                 on:click={inviteChild}
                 disabled={isInvitingChild}
-                class="save-btn"
+                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
               >
                 {#if isInvitingChild}Sending Invitation...{:else}Send Invitation{/if}
               </button>
@@ -399,45 +412,47 @@
                 type="button" 
                 on:click={cancelAddingChild}
                 disabled={isInvitingChild}
-                class="cancel-btn"
+                class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
               >
                 Cancel
               </button>
             </div>
             {#if inviteChildSuccess}
-              <p class="success-text">{inviteChildSuccess}</p>
+              <p class="text-green-600 text-sm mt-2 font-bold">{inviteChildSuccess}</p>
             {/if}
             {#if inviteChildError}
-              <p class="error-text">{inviteChildError}</p>
+              <p class="text-red-600 text-sm mt-2">{inviteChildError}</p>
             {/if}
           </div>
         {/if}
 
         {#if isLoadingFamily}
-          <p>Loading family members...</p>
+          <p class="text-center text-gray-600">Loading family members...</p>
         {:else if familyMembers.length > 0}
-          <div class="members-grid">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {#each familyMembers as member (member.$id)}
-              <div class="member-card {member.role}">
-                <div class="member-header">
-                  <span class="role-badge {member.role}">{member.role}</span>
+              <div class="border border-gray-300 rounded-lg p-6 bg-white shadow-sm {member.role === 'parent' ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-green-600'}">
+                <div class="flex justify-end mb-4">
+                  <span class="px-3 py-1 rounded-full text-xs font-bold uppercase text-white {member.role === 'parent' ? 'bg-blue-600' : 'bg-green-600'}">
+                    {member.role}
+                  </span>
                 </div>
                 
                 {#if member.role === "child" && editingChildId === member.$id}
-                  <div class="member-edit-form">
+                  <div class="flex flex-col gap-4">
                     <input 
                       type="text" 
                       bind:value={editingChildName} 
                       placeholder="Enter child's name"
                       disabled={isUpdatingChildName}
-                      class="member-name-input"
+                      class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <div class="edit-buttons">
+                    <div class="flex gap-2">
                       <button 
                         type="button" 
                         on:click={saveChildName}
                         disabled={isUpdatingChildName}
-                        class="save-btn"
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
                       >
                         {#if isUpdatingChildName}Saving...{:else}Save{/if}
                       </button>
@@ -445,28 +460,28 @@
                         type="button" 
                         on:click={cancelEditingChildName}
                         disabled={isUpdatingChildName}
-                        class="cancel-btn"
+                        class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
                       >
                         Cancel
                       </button>
                     </div>
                     {#if updateNameError}
-                      <p class="error-text">{updateNameError}</p>
+                      <p class="text-red-600 text-sm">{updateNameError}</p>
                     {/if}
                   </div>
                 {:else}
-                  <div class="member-info">
-                    <div class="member-details">
-                      <span class="member-name">
+                  <div class="flex justify-between items-center">
+                    <div class="flex flex-col gap-2">
+                      <span class="font-bold text-lg text-gray-800">
                         {member.name || "Unnamed User"}
                       </span>
-                      <span class="member-email">{member.email}</span>
+                      <span class="text-gray-600 text-sm">{member.email}</span>
                     </div>
                     {#if member.role === "child"}
                       <button 
                         type="button" 
                         on:click={() => startEditingChildName(member)}
-                        class="edit-name-btn"
+                        class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
                       >
                         {member.name ? "Edit Name" : "Set Name"}
                       </button>
@@ -477,341 +492,16 @@
             {/each}
           </div>
         {:else}
-          <p class="no-members">No family members found.</p>
+          <p class="text-center text-gray-500 italic py-8">No family members found.</p>
         {/if}
         
         {#if familyError}
-          <p class="error-text">Error loading family members: {familyError}</p>
+          <p class="text-red-600 text-sm mt-4">Error loading family members: {familyError}</p>
         {/if}
       </section>
     {/if}
   </div>
 {:else}
-  <p>You do not have permission to view this page or are not logged in.</p>
+  <p class="text-center text-gray-600">You do not have permission to view this page or are not logged in.</p>
 {/if}
-
-<style>
-  .family-page {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-
-  .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #eee;
-  }
-
-  .page-header h1 {
-    margin: 0;
-    color: #333;
-  }
-
-  .back-link {
-    color: #007bff;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .back-link:hover {
-    text-decoration: underline;
-  }
-
-  .family-creation-section {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .family-creation-section h2 {
-    color: #333;
-    margin-bottom: 1rem;
-  }
-
-  .family-creation-section p {
-    color: #666;
-    margin-bottom: 2rem;
-  }
-
-  .family-creation-section form {
-    max-width: 400px;
-    margin: 0 auto;
-  }
-
-  .family-creation-section div {
-    margin-bottom: 1rem;
-    text-align: left;
-  }
-
-  .family-creation-section label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: bold;
-  }
-
-  .family-creation-section input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-
-  .family-members-section {
-    background-color: #fff;
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-  }
-
-  .section-header h2 {
-    margin: 0;
-    color: #333;
-  }
-
-  .add-child-btn {
-    padding: 0.75rem 1.5rem;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-  }
-
-  .add-child-btn:hover {
-    background-color: #218838;
-  }
-
-  .add-child-form {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .add-child-form h3 {
-    margin: 0 0 1.5rem 0;
-    color: #333;
-  }
-
-  .form-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .form-fields > div {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .form-fields label {
-    font-weight: bold;
-    color: #333;
-  }
-
-  .form-fields input {
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-
-  .members-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .member-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 1.5rem;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-
-  .member-card.parent {
-    border-left: 4px solid #007bff;
-  }
-
-  .member-card.child {
-    border-left: 4px solid #28a745;
-  }
-
-  .member-header {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 1rem;
-  }
-
-  .role-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    color: white;
-  }
-
-  .role-badge.parent {
-    background-color: #007bff;
-  }
-
-  .role-badge.child {
-    background-color: #28a745;
-  }
-
-  .member-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .member-details {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .member-name {
-    font-weight: bold;
-    font-size: 1.1rem;
-    color: #333;
-  }
-
-  .member-email {
-    color: #666;
-    font-size: 0.9rem;
-  }
-
-  .edit-name-btn {
-    padding: 0.5rem 1rem;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-  }
-
-  .edit-name-btn:hover {
-    background-color: #5a6268;
-  }
-
-  .member-edit-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .member-name-input {
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-
-  .edit-buttons {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .save-btn {
-    padding: 0.5rem 1rem;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-  }
-
-  .save-btn:hover:not(:disabled) {
-    background-color: #218838;
-  }
-
-  .cancel-btn {
-    padding: 0.5rem 1rem;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-  }
-
-  .cancel-btn:hover:not(:disabled) {
-    background-color: #5a6268;
-  }
-
-  .error-text {
-    color: #dc3545;
-    font-size: 0.875rem;
-    margin: 0.5rem 0 0 0;
-  }
-
-  .success-text {
-    color: #28a745;
-    font-size: 0.875rem;
-    margin: 0.5rem 0 0 0;
-    font-weight: bold;
-  }
-
-  .no-members {
-    text-align: center;
-    color: #888;
-    font-style: italic;
-    padding: 2rem;
-  }
-
-  button {
-    padding: 0.75rem 1.5rem;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  button:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
-
-  button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 768px) {
-    .form-fields {
-      grid-template-columns: 1fr;
-    }
-    
-    .members-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .page-header {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-  }
-</style>
 

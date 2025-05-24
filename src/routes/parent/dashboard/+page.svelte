@@ -271,34 +271,36 @@
 </script>
 
 {#if $userStore.loading}
-  <p>Loading user data...</p>
+  <p class="text-center text-gray-600">Loading user data...</p>
 {:else if $userStore.currentUser && $userStore.currentUser.role === 'parent'}
-  <div class="dashboard">
-    <div class="dashboard-header">
-      <h1>Parent Dashboard</h1>
-      <nav class="dashboard-nav">
-        <a href="/parent/family" class="nav-link">Manage Family</a>
+  <div class="max-w-6xl mx-auto p-8">
+    <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-8 pb-4 border-b-2 border-gray-200">
+      <h1 class="text-3xl font-bold text-gray-800 mb-4 md:mb-0">Parent Dashboard</h1>
+      <nav class="flex gap-4">
+        <a href="/parent/family" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors font-medium">
+          Manage Family
+        </a>
       </nav>
     </div>
 
-    <div class="welcome-section">
+    <div class="mb-8 p-6 border border-gray-200 rounded-lg bg-gray-50">
       {#if isEditingParentName}
         <div class="parent-name-edit">
-          <h2>Edit Your Name</h2>
-          <div class="parent-edit-form">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Edit Your Name</h2>
+          <div class="flex flex-col gap-4">
             <input 
               type="text" 
               bind:value={editingParentName} 
               placeholder="Enter your name"
               disabled={isUpdatingParentName}
-              class="parent-name-input"
+              class="max-w-xs px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <div class="edit-buttons">
+            <div class="flex gap-2">
               <button 
                 type="button" 
                 on:click={saveParentName}
                 disabled={isUpdatingParentName}
-                class="save-btn"
+                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium"
               >
                 {#if isUpdatingParentName}Saving...{:else}Save{/if}
               </button>
@@ -306,25 +308,25 @@
                 type="button" 
                 on:click={cancelEditingParentName}
                 disabled={isUpdatingParentName}
-                class="cancel-btn"
+                class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium"
               >
                 Cancel
               </button>
             </div>
             {#if updateParentNameError}
-              <p class="error-text">{updateParentNameError}</p>
+              <p class="text-red-600 text-sm mt-2">{updateParentNameError}</p>
             {/if}
           </div>
         </div>
       {:else}
-        <div class="welcome-info">
-          <p class="welcome-text">
-            Welcome, <span class="user-name">{$userStore.currentUser.name || $userStore.currentUser.email}</span>!
+        <div class="flex justify-between items-center">
+          <p class="text-lg">
+            Welcome, <span class="font-bold text-blue-600">{$userStore.currentUser.name || $userStore.currentUser.email}</span>!
           </p>
           <button 
             type="button" 
             on:click={startEditingParentName}
-            class="edit-name-btn"
+            class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm font-medium"
           >
             {$userStore.currentUser.name ? 'Edit Name' : 'Set Name'}
           </button>
@@ -333,130 +335,186 @@
     </div>
 
     {#if !$userStore.currentUser.family_id}
-      <section class="family-creation-section">
-        <h2>Create Your Family Group</h2>
-        <p>To start managing tasks, you need to create a family group.</p>
-        <form on:submit|preventDefault={handleCreateFamily}>
-          <div>
-            <label for="familyName">Family Name:</label>
-            <input type="text" id="familyName" bind:value={familyName} required disabled={isCreatingFamily} />
+      <section class="bg-gray-50 border border-gray-300 rounded-lg p-8 text-center mb-8">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Create Your Family Group</h2>
+        <p class="text-gray-600 mb-8">To start managing tasks, you need to create a family group.</p>
+        <form on:submit|preventDefault={handleCreateFamily} class="max-w-md mx-auto">
+          <div class="mb-4 text-left">
+            <label for="familyName" class="block mb-2 font-bold text-gray-700">Family Name:</label>
+            <input 
+              type="text" 
+              id="familyName" 
+              bind:value={familyName} 
+              required 
+              disabled={isCreatingFamily}
+              class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-          <button type="submit" disabled={isCreatingFamily}>
+          <button 
+            type="submit" 
+            disabled={isCreatingFamily}
+            class="w-full px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+          >
             {#if isCreatingFamily}Creating...{:else}Create Family{/if}
           </button>
           {#if createFamilyError}
-            <p class="error-text">{createFamilyError}</p>
+            <p class="text-red-600 text-sm mt-2">{createFamilyError}</p>
           {/if}
         </form>
       </section>
     {:else}
-      <section class="task-creation-section">
-        <h2>Create New Task</h2>
+      <section class="bg-white border border-gray-200 rounded-lg p-8 mb-8">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 pb-2 border-b-2 border-blue-600">Create New Task</h2>
         <form on:submit|preventDefault={handleCreateTask}>
-          <div class="form-grid">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label for="taskTitle">Title:</label>
-              <input type="text" id="taskTitle" bind:value={taskTitle} required disabled={isCreatingTask} />
+              <label for="taskTitle" class="block mb-2 font-bold text-gray-700">Title:</label>
+              <input 
+                type="text" 
+                id="taskTitle" 
+                bind:value={taskTitle} 
+                required 
+                disabled={isCreatingTask}
+                class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
             <div>
-              <label for="assignTo">Assign to Child:</label>
+              <label for="assignTo" class="block mb-2 font-bold text-gray-700">Assign to Child:</label>
               {#if isLoadingChildren}
-                <p class="loading-text">Loading children...</p>
+                <p class="text-gray-600 italic">Loading children...</p>
               {:else if children.length > 0}
-                <select id="assignTo" bind:value={assignedToUserId} required disabled={isCreatingTask}>
+                <select 
+                  id="assignTo" 
+                  bind:value={assignedToUserId} 
+                  required 
+                  disabled={isCreatingTask}
+                  class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
                   <option value="" disabled>Select a child</option>
                   {#each children as child}
                     <option value={child.$id}>{child.name || child.email}</option>
                   {/each}
                 </select>
               {:else}
-                <p class="no-children-text">No children found. <a href="/parent/family">Add children to your family</a></p>
+                <p class="text-red-600">No children found. <a href="/parent/family" class="text-blue-600 hover:underline">Add children to your family</a></p>
               {/if}
               {#if childrenError}
-                <p class="error-text">Error loading children: {childrenError}</p>
+                <p class="text-red-600 text-sm">Error loading children: {childrenError}</p>
               {/if}
             </div>
           </div>
           
-          <div>
-            <label for="taskDescription">Description (optional):</label>
-            <textarea id="taskDescription" bind:value={taskDescription} disabled={isCreatingTask}></textarea>
+          <div class="mb-4">
+            <label for="taskDescription" class="block mb-2 font-bold text-gray-700">Description (optional):</label>
+            <textarea 
+              id="taskDescription" 
+              bind:value={taskDescription} 
+              disabled={isCreatingTask}
+              class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-20 resize-y"
+            ></textarea>
           </div>
           
-          <div class="form-row">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label for="taskPriority">Priority:</label>
-              <select id="taskPriority" bind:value={taskPriority} disabled={isCreatingTask}>
+              <label for="taskPriority" class="block mb-2 font-bold text-gray-700">Priority:</label>
+              <select 
+                id="taskPriority" 
+                bind:value={taskPriority} 
+                disabled={isCreatingTask}
+                class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
             </div>
             <div>
-              <label for="taskPoints">Points:</label>
-              <input type="number" id="taskPoints" bind:value={taskPoints} min="0" max="100" disabled={isCreatingTask} />
+              <label for="taskPoints" class="block mb-2 font-bold text-gray-700">Points:</label>
+              <input 
+                type="number" 
+                id="taskPoints" 
+                bind:value={taskPoints} 
+                min="0" 
+                max="100" 
+                disabled={isCreatingTask}
+                class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
             <div>
-              <label for="taskDueDate">Due Date (optional):</label>
-              <input type="date" id="taskDueDate" bind:value={taskDueDate} disabled={isCreatingTask} />
+              <label for="taskDueDate" class="block mb-2 font-bold text-gray-700">Due Date (optional):</label>
+              <input 
+                type="date" 
+                id="taskDueDate" 
+                bind:value={taskDueDate} 
+                disabled={isCreatingTask}
+                class="w-full px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
           </div>
           
-          <button type="submit" disabled={isCreatingTask || isLoadingChildren || children.length === 0}>
+          <button 
+            type="submit" 
+            disabled={isCreatingTask || isLoadingChildren || children.length === 0}
+            class="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+          >
             {#if isCreatingTask}Creating Task...{:else}Create Task{/if}
           </button>
           
           {#if createTaskSuccess}
-            <p class="success-text">{createTaskSuccess}</p>
+            <p class="text-green-600 text-sm mt-2 font-bold">{createTaskSuccess}</p>
           {/if}
           {#if createTaskError}
-            <p class="error-text">{createTaskError}</p>
+            <p class="text-red-600 text-sm mt-2">{createTaskError}</p>
           {/if}
         </form>
       </section>
 
-      <section class="tasks-section">
-        <h2>All Family Tasks</h2>
+      <section class="bg-white border border-gray-200 rounded-lg p-8 mb-8">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 pb-2 border-b-2 border-blue-600">All Family Tasks</h2>
         {#if isLoadingTasks}
-          <p class="loading-text">Loading tasks...</p>
+          <p class="text-gray-600 italic">Loading tasks...</p>
         {:else if tasksError}
-          <p class="error-text">Error loading tasks: {tasksError}</p>
+          <p class="text-red-600">Error loading tasks: {tasksError}</p>
         {:else if allTasks.length > 0}
-          <div class="tasks-grid">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
             {#each allTasks as task (task.$id)}
               {@const assignedChild = children.find(member => member.$id === task.assigned_to_user_id)}
-              <div class="task-card {task.status}">
-                <div class="task-header">
-                  <h3>{task.title}</h3>
-                  <div class="task-badges">
-                    <span class="status-badge {task.status}">{task.status}</span>
-                    <span class="priority-badge {task.priority}">{task.priority}</span>
+              <div class="border border-gray-300 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow {task.status === 'pending' ? 'border-l-4 border-l-blue-600' : 'border-l-4 border-l-green-600 opacity-90'}">
+                <div class="flex justify-between items-start mb-4">
+                  <h3 class="text-lg font-semibold text-gray-800 flex-1">{task.title}</h3>
+                  <div class="flex gap-2 flex-shrink-0">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold uppercase {task.status === 'pending' ? 'bg-yellow-400 text-black' : 'bg-green-600 text-white'}">
+                      {task.status}
+                    </span>
+                    <span class="px-3 py-1 rounded-full text-xs font-bold uppercase text-white {task.priority === 'low' ? 'bg-green-600' : task.priority === 'medium' ? 'bg-yellow-400 text-black' : 'bg-red-600'}">
+                      {task.priority}
+                    </span>
                   </div>
                 </div>
                 
                 {#if task.description}
-                  <p class="task-description">{task.description}</p>
+                  <p class="text-gray-600 italic mb-4 leading-relaxed">{task.description}</p>
                 {/if}
                 
-                <div class="task-details">
-                  <div class="task-meta">
-                    <span class="assigned-to">
+                <div class="mt-4">
+                  <div class="flex flex-col gap-2 mb-4">
+                    <span class="text-sm text-blue-600">
                       <strong>Assigned to:</strong> {assignedChild?.name || assignedChild?.email || 'Unknown'}
                     </span>
-                    <span class="points">
+                    <span class="text-sm text-green-600">
                       <strong>Points:</strong> {task.points}
                     </span>
                     {#if task.due_date}
-                      <span class="due-date">
+                      <span class="text-sm text-red-600">
                         <strong>Due:</strong> {new Date(task.due_date).toLocaleDateString()}
                       </span>
                     {/if}
                   </div>
                   
-                  <div class="task-timestamps">
-                    <small>Created: {new Date(task.created_at).toLocaleDateString()}</small>
+                  <div class="flex flex-col gap-1 border-t border-gray-200 pt-3">
+                    <small class="text-gray-500 text-xs">Created: {new Date(task.created_at).toLocaleDateString()}</small>
                     {#if task.updated_at !== task.created_at}
-                      <small>Updated: {new Date(task.updated_at).toLocaleDateString()}</small>
+                      <small class="text-gray-500 text-xs">Updated: {new Date(task.updated_at).toLocaleDateString()}</small>
                     {/if}
                   </div>
                 </div>
@@ -464,8 +522,8 @@
             {/each}
           </div>
         {:else}
-          <div class="no-tasks">
-            <p>No tasks created yet.</p>
+          <div class="text-center text-gray-500 py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+            <p class="mb-2">No tasks created yet.</p>
             <p>Create your first task above to get started!</p>
           </div>
         {/if}
@@ -473,480 +531,5 @@
     {/if}
   </div>
 {:else}
-  <p>You do not have permission to view this page or are not logged in.</p>
-{/if}
-
-<style>
-  .dashboard {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-
-  .dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #eee;
-  }
-
-  .dashboard-header h1 {
-    margin: 0;
-    color: #333;
-  }
-
-  .dashboard-nav {
-    display: flex;
-    gap: 1rem;
-  }
-
-  .nav-link {
-    padding: 0.5rem 1rem;
-    background-color: #6c757d;
-    color: white;
-    text-decoration: none;
-    border-radius: 4px;
-    font-weight: 500;
-    transition: background-color 0.2s;
-  }
-
-  .nav-link:hover {
-    background-color: #5a6268;
-  }
-
-  .welcome-section {
-    margin-bottom: 2rem;
-    padding: 1.5rem;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    background-color: #f8f9fa;
-  }
-
-  .welcome-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .welcome-text {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-
-  .user-name {
-    font-weight: bold;
-    color: #007bff;
-  }
-
-  .parent-name-edit h2 {
-    margin: 0 0 1rem 0;
-    color: #333;
-  }
-
-  .parent-edit-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .parent-name-input {
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-    max-width: 300px;
-  }
-
-  .family-creation-section {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 2rem;
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .family-creation-section h2 {
-    color: #333;
-    margin-bottom: 1rem;
-  }
-
-  .family-creation-section p {
-    color: #666;
-    margin-bottom: 2rem;
-  }
-
-  .family-creation-section form {
-    max-width: 400px;
-    margin: 0 auto;
-  }
-
-  .family-creation-section div {
-    margin-bottom: 1rem;
-    text-align: left;
-  }
-
-  .family-creation-section label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: bold;
-  }
-
-  .family-creation-section input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-
-  .task-creation-section,
-  .tasks-section {
-    background-color: #fff;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .task-creation-section h2,
-  .tasks-section h2 {
-    margin: 0 0 1.5rem 0;
-    color: #333;
-    border-bottom: 2px solid #007bff;
-    padding-bottom: 0.5rem;
-  }
-
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .form-grid > div,
-  .form-row > div {
-    margin-bottom: 0;
-  }
-
-  label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: bold;
-    color: #333;
-  }
-
-  input[type="text"],
-  input[type="number"],
-  input[type="date"],
-  textarea,
-  select {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
-    box-sizing: border-box;
-  }
-
-  textarea {
-    min-height: 80px;
-    resize: vertical;
-  }
-
-  .loading-text {
-    color: #666;
-    font-style: italic;
-    margin: 0;
-  }
-
-  .no-children-text {
-    color: #dc3545;
-    margin: 0;
-  }
-
-  .no-children-text a {
-    color: #007bff;
-    text-decoration: none;
-  }
-
-  .no-children-text a:hover {
-    text-decoration: underline;
-  }
-
-  .tasks-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-  }
-
-  .task-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 1.5rem;
-    background-color: #fff;
-    transition: box-shadow 0.2s;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-
-  .task-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  }
-
-  .task-card.pending {
-    border-left: 4px solid #007bff;
-  }
-
-  .task-card.completed {
-    border-left: 4px solid #28a745;
-    opacity: 0.9;
-  }
-
-  .task-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
-  }
-
-  .task-header h3 {
-    margin: 0;
-    color: #333;
-    flex: 1;
-    font-size: 1.1rem;
-  }
-
-  .task-badges {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-
-  .status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-  }
-
-  .status-badge.pending {
-    background-color: #ffc107;
-    color: #000;
-  }
-
-  .status-badge.completed {
-    background-color: #28a745;
-    color: white;
-  }
-
-  .priority-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    color: white;
-  }
-
-  .priority-badge.low {
-    background-color: #28a745;
-  }
-
-  .priority-badge.medium {
-    background-color: #ffc107;
-    color: #000;
-  }
-
-  .priority-badge.high {
-    background-color: #dc3545;
-  }
-
-  .task-description {
-    color: #666;
-    font-style: italic;
-    margin: 0 0 1rem 0;
-    line-height: 1.4;
-  }
-
-  .task-details {
-    margin-top: 1rem;
-  }
-
-  .task-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .task-meta span {
-    font-size: 0.875rem;
-  }
-
-  .assigned-to {
-    color: #007bff;
-  }
-
-  .points {
-    color: #28a745;
-  }
-
-  .due-date {
-    color: #dc3545;
-  }
-
-  .task-timestamps {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    border-top: 1px solid #eee;
-    padding-top: 0.75rem;
-  }
-
-  .task-timestamps small {
-    color: #888;
-    font-size: 0.75rem;
-  }
-
-  .no-tasks {
-    text-align: center;
-    color: #888;
-    padding: 3rem 2rem;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    border: 2px dashed #dee2e6;
-  }
-
-  .no-tasks p {
-    margin: 0.5rem 0;
-  }
-
-  .edit-buttons {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .save-btn {
-    padding: 0.5rem 1rem;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .save-btn:hover:not(:disabled) {
-    background-color: #218838;
-  }
-
-  .cancel-btn {
-    padding: 0.5rem 1rem;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .cancel-btn:hover:not(:disabled) {
-    background-color: #5a6268;
-  }
-
-  .edit-name-btn {
-    padding: 0.5rem 1rem;
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .edit-name-btn:hover {
-    background-color: #5a6268;
-  }
-
-  .error-text {
-    color: #dc3545;
-    font-size: 0.875rem;
-    margin: 0.5rem 0 0 0;
-  }
-
-  .success-text {
-    color: #28a745;
-    font-size: 0.875rem;
-    margin: 0.5rem 0 0 0;
-    font-weight: bold;
-  }
-
-  button {
-    padding: 0.75rem 1.5rem;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    font-size: 1rem;
-    transition: background-color 0.2s;
-  }
-
-  button:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
-
-  button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 768px) {
-    .dashboard {
-      padding: 1rem;
-    }
-
-    .dashboard-header {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-
-    .form-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .form-row {
-      grid-template-columns: 1fr;
-    }
-
-    .tasks-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .task-header {
-      flex-direction: column;
-      gap: 0.5rem;
-      align-items: flex-start;
-    }
-
-    .task-badges {
-      align-self: flex-end;
-    }
-  }
-</style> 
+  <p class="text-center text-gray-600">You do not have permission to view this page or are not logged in.</p>
+{/if} 

@@ -25,10 +25,13 @@
   });
 </script>
 
-<h1>Authenticating...</h1>
-{#if message}
-  <p style="color: green">{message}</p>
-{/if}
-{#if error}
-  <p style="color: red">{error}</p>
-{/if} 
+<div class="max-w-md mx-auto mt-16 p-8 bg-white border border-gray-200 rounded-lg shadow-sm text-center">
+  <h1 class="text-3xl font-bold text-gray-800 mb-8">Authenticating...</h1>
+  
+  {#if message}
+    <p class="text-green-600 font-medium">{message}</p>
+  {/if}
+  {#if error}
+    <p class="text-red-600">{error}</p>
+  {/if}
+</div> 

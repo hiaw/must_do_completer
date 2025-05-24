@@ -23,92 +23,41 @@
 </script>
 
 {#if $userStore.loading}
-  <p>Loading...</p>
+  <p class="text-center text-gray-600">Loading...</p>
 {:else if !$userStore.currentUser}
-  <div class="welcome-container">
-    <h1>Welcome to Must-Dos Completer</h1>
-    <p>A family task management app where parents can assign tasks and children can complete them!</p>
+  <div class="max-w-2xl mx-auto mt-8 p-8 text-center">
+    <h1 class="text-4xl font-bold text-blue-600 mb-4">Welcome to Must-Dos Completer</h1>
+    <p class="text-lg text-gray-700 mb-8">A family task management app where parents can assign tasks and children can complete them!</p>
     
-    <div class="features">
-      <h2>Features:</h2>
-      <ul>
-        <li><strong>For Parents:</strong> Create and assign tasks to your children</li>
-        <li><strong>For Children:</strong> View and complete your assigned tasks</li>
-        <li><strong>Family Groups:</strong> Organize tasks within your family</li>
-        <li><strong>Task Tracking:</strong> See completed tasks and progress</li>
+    <div class="my-8 text-left bg-gray-50 p-6 rounded-lg">
+      <h2 class="text-2xl font-semibold text-gray-800 mt-0 mb-4">Features:</h2>
+      <ul class="space-y-3">
+        <li class="flex items-start">
+          <span class="text-green-500 font-bold mr-3">✓</span>
+          <span><strong>For Parents:</strong> Create and assign tasks to your children</span>
+        </li>
+        <li class="flex items-start">
+          <span class="text-green-500 font-bold mr-3">✓</span>
+          <span><strong>For Children:</strong> View and complete your assigned tasks</span>
+        </li>
+        <li class="flex items-start">
+          <span class="text-green-500 font-bold mr-3">✓</span>
+          <span><strong>Family Groups:</strong> Organize tasks within your family</span>
+        </li>
+        <li class="flex items-start">
+          <span class="text-green-500 font-bold mr-3">✓</span>
+          <span><strong>Task Tracking:</strong> See completed tasks and progress</span>
+        </li>
       </ul>
     </div>
 
-    <div class="auth-actions">
-      <a href="/login" class="login-btn">Get Started - Login</a>
+    <div class="mt-8">
+      <a href="/login" class="inline-block px-8 py-3 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition-colors duration-200 no-underline">
+        Get Started - Login
+      </a>
     </div>
   </div>
 {:else}
   <!-- User is logged in but redirect hasn't happened yet -->
-  <p>Redirecting to your dashboard...</p>
+  <p class="text-center text-gray-600">Redirecting to your dashboard...</p>
 {/if}
-
-<style>
-  .welcome-container {
-    max-width: 600px;
-    margin: 2rem auto;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .welcome-container h1 {
-    color: #007bff;
-    margin-bottom: 1rem;
-  }
-
-  .features {
-    margin: 2rem 0;
-    text-align: left;
-    background-color: #f8f9fa;
-    padding: 1.5rem;
-    border-radius: 8px;
-  }
-
-  .features h2 {
-    margin-top: 0;
-    color: #333;
-  }
-
-  .features ul {
-    list-style-type: none;
-    padding: 0;
-  }
-
-  .features li {
-    margin: 0.75rem 0;
-    padding-left: 1rem;
-    position: relative;
-  }
-
-  .features li::before {
-    content: '✓';
-    position: absolute;
-    left: 0;
-    color: #28a745;
-    font-weight: bold;
-  }
-
-  .auth-actions {
-    margin-top: 2rem;
-  }
-
-  .login-btn {
-    display: inline-block;
-    padding: 0.75rem 2rem;
-    background-color: #007bff;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    font-weight: bold;
-    transition: background-color 0.2s;
-  }
-
-  .login-btn:hover {
-    background-color: #0056b3;
-  }
-</style>

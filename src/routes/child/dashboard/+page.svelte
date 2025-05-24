@@ -161,207 +161,95 @@
 </script>
 
 {#if $userStore.loading}
-  <p>Loading user data...</p>
+  <p class="text-center text-gray-600">Loading user data...</p>
 {:else if $userStore.currentUser && $userStore.currentUser.role === 'child'}
-  <h1>My Tasks</h1>
-  <p>Welcome, {$userStore.currentUser.name || $userStore.currentUser.email}!</p>
+  <div class="max-w-4xl mx-auto p-8">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">My Tasks</h1>
+      <p class="text-lg text-gray-600">Welcome, {$userStore.currentUser.name || $userStore.currentUser.email}!</p>
+    </div>
 
-  {#if !$userStore.currentUser.family_id}
-    <section class="no-family-section">
-      <h2>No Family Group</h2>
-      <p>You need to be invited to a family group by a parent to see your tasks.</p>
-      <p>Ask a parent to invite you to their family group.</p>
-    </section>
-  {:else}
-    <!-- Pending Tasks Section -->
-    <section>
-      <h2>Tasks to Complete</h2>
-      {#if isLoadingTasks}
-        <p>Loading your tasks...</p>
-      {:else if taskError}
-        <p style="color: red;">Error loading tasks: {taskError}</p>
-      {:else}
-        {#each tasks.filter(t => t.status === 'pending') as task (task.$id)}
-          <div class="task-card pending-task">
-            <div class="task-header">
-              <h3>{task.title}</h3>
-              <span class="priority-badge" style="background-color: {getPriorityColor(task.priority)}">
-                {task.priority}
-              </span>
-            </div>
-            {#if task.description}
-              <p class="task-description">{task.description}</p>
-            {/if}
-            <div class="task-meta">
-              {#if task.due_date}
-                <span class="due-date">Due: {formatDate(task.due_date)}</span>
-              {/if}
-              {#if task.points}
-                <span class="points">Points: {task.points}</span>
-              {/if}
-            </div>
-            <button 
-              class="complete-btn"
-              on:click={() => handleCompleteTask(task)}
-              disabled={completingTaskId === task.$id}
-            >
-              {#if completingTaskId === task.$id}
-                Completing...
-              {:else}
-                Mark Complete
-              {/if}
-            </button>
-          </div>
+    {#if !$userStore.currentUser.family_id}
+      <section class="mb-8 p-6 border border-yellow-400 rounded-lg bg-yellow-50">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">No Family Group</h2>
+        <p class="text-gray-700 mb-2">You need to be invited to a family group by a parent to see your tasks.</p>
+        <p class="text-gray-700">Ask a parent to invite you to their family group.</p>
+      </section>
+    {:else}
+      <!-- Pending Tasks Section -->
+      <section class="mb-8 p-6 border border-gray-200 rounded-lg">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6">Tasks to Complete</h2>
+        {#if isLoadingTasks}
+          <p class="text-center text-gray-600">Loading your tasks...</p>
+        {:else if taskError}
+          <p class="text-red-600">Error loading tasks: {taskError}</p>
         {:else}
-          <p class="no-tasks">Great job! You have no pending tasks.</p>
-        {/each}
-      {/if}
-    </section>
+          {#each tasks.filter(t => t.status === 'pending') as task (task.$id)}
+            <div class="border border-gray-300 rounded-lg p-6 mb-4 bg-white border-l-4 border-l-blue-600">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="text-lg font-semibold text-gray-800">{task.title}</h3>
+                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase text-white {task.priority === 'high' ? 'bg-red-500' : task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}">
+                  {task.priority}
+                </span>
+              </div>
+              {#if task.description}
+                <p class="text-gray-600 italic mb-3">{task.description}</p>
+              {/if}
+              <div class="flex gap-4 mb-4 text-sm text-gray-500">
+                {#if task.due_date}
+                  <span class="text-orange-600">Due: {formatDate(task.due_date)}</span>
+                {/if}
+                {#if task.points}
+                  <span class="text-blue-600 font-bold">Points: {task.points}</span>
+                {/if}
+              </div>
+              <button 
+                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors font-bold"
+                on:click={() => handleCompleteTask(task)}
+                disabled={completingTaskId === task.$id}
+              >
+                {#if completingTaskId === task.$id}
+                  Completing...
+                {:else}
+                  Mark Complete
+                {/if}
+              </button>
+            </div>
+          {:else}
+            <p class="text-center text-gray-500 italic py-8">Great job! You have no pending tasks.</p>
+          {/each}
+        {/if}
+      </section>
 
-    <!-- Completed Tasks Section -->
-    <section>
-      <h2>Recently Completed Tasks</h2>
-      {#if isLoadingTasks}
-        <p>Loading completed tasks...</p>
-      {:else if completedTasks.length > 0}
-        {#each completedTasks.slice(0, 5) as completion (completion.$id)}
-          {@const completedTask = tasks.find(t => t.$id === completion.task_id)}
-          <div class="task-card completed-task">
-            <div class="task-header">
-              <h3>{completedTask?.title || 'Task not found'}</h3>
-              <span class="completed-badge">✓ Completed</span>
+      <!-- Completed Tasks Section -->
+      <section class="mb-8 p-6 border border-gray-200 rounded-lg">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6">Recently Completed Tasks</h2>
+        {#if isLoadingTasks}
+          <p class="text-center text-gray-600">Loading completed tasks...</p>
+        {:else if completedTasks.length > 0}
+          {#each completedTasks.slice(0, 5) as completion (completion.$id)}
+            {@const completedTask = tasks.find(t => t.$id === completion.task_id)}
+            <div class="border border-gray-300 rounded-lg p-6 mb-4 bg-white border-l-4 border-l-green-600 opacity-80">
+              <div class="flex justify-between items-center mb-3">
+                <h3 class="text-lg font-semibold text-gray-800">{completedTask?.title || 'Task not found'}</h3>
+                <span class="text-green-600 font-bold text-sm">✓ Completed</span>
+              </div>
+              <div class="flex gap-4 text-sm text-gray-500">
+                <span class="text-gray-600">Completed: {formatDate(completion.completed_at)}</span>
+                {#if completion.points_awarded}
+                  <span class="text-green-600 font-bold">+{completion.points_awarded} points</span>
+                {/if}
+              </div>
             </div>
-            <div class="task-meta">
-              <span class="completion-date">Completed: {formatDate(completion.completed_at)}</span>
-              {#if completion.points_awarded}
-                <span class="points-earned">+{completion.points_awarded} points</span>
-              {/if}
-            </div>
-          </div>
+          {:else}
+            <p class="text-center text-gray-500 italic py-8">No completed tasks yet. Start completing tasks above!</p>
+          {/each}
         {:else}
-          <p class="no-tasks">No completed tasks yet. Start completing tasks above!</p>
-        {/each}
-      {:else}
-        <p class="no-tasks">No completed tasks yet. Start completing tasks above!</p>
-      {/if}
-    </section>
-  {/if}
+          <p class="text-center text-gray-500 italic py-8">No completed tasks yet. Start completing tasks above!</p>
+        {/if}
+      </section>
+    {/if}
+  </div>
 {:else}
-  <p>You do not have permission to view this page or are not logged in.</p>
-{/if}
-
-<style>
-  section {
-    margin-bottom: 2rem;
-    padding: 1rem;
-    border: 1px solid #eee;
-    border-radius: 8px;
-  }
-
-  .no-family-section {
-    background-color: #fff9e6;
-    border-color: #ffd700;
-  }
-
-  .task-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    background-color: #fff;
-  }
-
-  .pending-task {
-    border-left: 4px solid #007bff;
-  }
-
-  .completed-task {
-    border-left: 4px solid #28a745;
-    opacity: 0.8;
-  }
-
-  .task-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-  }
-
-  .task-header h3 {
-    margin: 0;
-    color: #333;
-  }
-
-  .priority-badge {
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-  }
-
-  .completed-badge {
-    color: #28a745;
-    font-weight: bold;
-    font-size: 0.875rem;
-  }
-
-  .task-description {
-    color: #666;
-    margin: 0.5rem 0;
-    font-style: italic;
-  }
-
-  .task-meta {
-    display: flex;
-    gap: 1rem;
-    margin: 0.5rem 0;
-    font-size: 0.875rem;
-    color: #888;
-  }
-
-  .due-date {
-    color: #ff6600;
-  }
-
-  .points {
-    color: #007bff;
-    font-weight: bold;
-  }
-
-  .points-earned {
-    color: #28a745;
-    font-weight: bold;
-  }
-
-  .completion-date {
-    color: #666;
-  }
-
-  .complete-btn {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-  }
-
-  .complete-btn:hover:not(:disabled) {
-    background-color: #218838;
-  }
-
-  .complete-btn:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
-  }
-
-  .no-tasks {
-    text-align: center;
-    color: #888;
-    font-style: italic;
-    padding: 2rem;
-  }
-</style> 
+  <p class="text-center text-gray-600">You do not have permission to view this page or are not logged in.</p>
+{/if} 
