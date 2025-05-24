@@ -11,7 +11,6 @@
   import { Query, ID } from "appwrite"
   import CreateTaskModal from "$lib/components/CreateTaskModal.svelte"
   import TaskList from "$lib/components/TaskList.svelte"
-  import CreateRecurringTaskModal from "$lib/components/CreateRecurringTaskModal.svelte" // Import new modal
   import type { RecurringTask } from "$lib/types" // Import RecurringTask type
 
   const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || "must_dos_db"
@@ -28,7 +27,6 @@
 
   // Create task modal
   let isCreateTaskModalOpen = false
-  let isCreateRecurringTaskModalOpen = false // New state for recurring task modal
 
   // Task listing
   let allTasks: any[] = []
@@ -194,11 +192,6 @@
     isCreateTaskModalOpen = true
   }
 
-  function openCreateRecurringTaskModal() {
-    // New function
-    isCreateRecurringTaskModalOpen = true
-  }
-
   function handleTaskCreated(event: CustomEvent) {
     // Refresh the task list when a new task is created
     fetchAllTasks()
@@ -208,14 +201,9 @@
     isCreateTaskModalOpen = false
   }
 
-  function handleRecurringTaskModalClose() {
-    // New function
-    isCreateRecurringTaskModalOpen = false
-  }
-
   function handleRecurringTaskCreated() {
-    // New function
-    fetchRecurringTasks() // Refresh the list
+    // Refresh the recurring tasks list
+    fetchRecurringTasks()
   }
 </script>
 
@@ -303,14 +291,7 @@
                 on:click={openCreateTaskModal}
                 class="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-bold text-sm"
               >
-                + Create Single Task
-              </button>
-              <button
-                type="button"
-                on:click={openCreateRecurringTaskModal}
-                class="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-bold text-sm"
-              >
-                + Create Recurring Task
+                + Create Task
               </button>
             {:else}
               <p class="text-red-600 text-sm">
@@ -460,13 +441,5 @@
   {childrenError}
   on:close={handleModalClose}
   on:taskCreated={handleTaskCreated}
-/>
-
-<CreateRecurringTaskModal
-  isOpen={isCreateRecurringTaskModalOpen}
-  {children}
-  {isLoadingChildren}
-  {childrenError}
-  on:close={handleRecurringTaskModalClose}
   on:recurringTaskCreated={handleRecurringTaskCreated}
 />
