@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { userStore, type UserProfile, loadUser } from "$lib/stores/userStore"
+  import {
+    userStore,
+    type UserProfile,
+    loadUser,
+    loadUserBasic,
+  } from "$lib/stores/userStore"
   import { goto } from "$app/navigation"
   import { databases, teams } from "$lib/appwrite"
   import { Query, ID } from "appwrite"
@@ -135,6 +140,7 @@
         { family_id: newTeam.$id },
       )
 
+      // Use full loadUser() here to sync team membership after family creation
       await loadUser()
       familyName = ""
     } catch (err: any) {
