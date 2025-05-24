@@ -2,7 +2,7 @@
   import { onMount } from "svelte"
   import { userStore, type UserProfile, loadUser } from "$lib/stores/userStore"
   import { goto } from "$app/navigation"
-  import { teams, databases } from "$lib/appwrite"
+  import { teams, databases, account } from "$lib/appwrite"
   import { Query, ID } from "appwrite"
 
   // Assume DATABASE_ID and USERS_EXTENDED_COLLECTION_ID are available or imported if needed
@@ -96,6 +96,17 @@
 
         if (!extendedProfile && membership.userName) {
           try {
+            // If this is the current user, get their email from account service
+            let memberEmail = "Email not available"
+            if (membership.userId === $userStore.currentUser?.$id) {
+              try {
+                const currentUserAccount = await account.get()
+                memberEmail = currentUserAccount.email
+              } catch (accountError) {
+                console.warn("Could not get current user email:", accountError)
+              }
+            }
+
             const newExtendedProfile = await databases.createDocument(
               DATABASE_ID,
               USERS_EXTENDED_COLLECTION_ID,
@@ -105,7 +116,7 @@
                 role: membership.roles.includes("child") ? "child" : "parent",
                 family_id: familyTeamId,
                 name: membership.userName,
-                email: appwriteUser.userEmail || "No email available",
+                email: memberEmail, // Store email when creating
               },
             )
             memberName = membership.userName
@@ -315,6 +326,7 @@
               user_id: newMembership.userId,
               role: newMemberRole,
               family_id: $userStore.currentUser.family_id,
+              name: "",
               email: trimmedEmail,
             },
           )
@@ -433,29 +445,55 @@
     }
 
     try {
-      // Get the membership details which should include more user information
-      const memberships = await teams.listMemberships(
-        $userStore.currentUser.family_id,
-      )
-      const membershipData = memberships.memberships.find(
-        (m) => m.userId === member.$id,
+      // If this is the current user, we can get their email from the account service
+      if (member.$id === $userStore.currentUser.$id) {
+        try {
+          const currentUserAccount = await account.get()
+          detailedMemberInfo = {
+            email: currentUserAccount.email,
+            name: currentUserAccount.name,
+            userId: currentUserAccount.$id,
+            isCurrentUser: true,
+          }
+          isLoadingMemberDetails = false
+          return
+        } catch (accountError) {
+          console.warn("Could not get current user account info:", accountError)
+        }
+      }
+
+      // For other users, try to get email from the users_extended collection
+      // This will work if we stored the email when they were invited
+      const extendedProfile = await databases.listDocuments(
+        DATABASE_ID,
+        USERS_EXTENDED_COLLECTION_ID,
+        [Query.equal("user_id", member.$id)],
       )
 
-      if (membershipData) {
-        // Get detailed membership information
-        const detailedMembership = await teams.getMembership(
-          $userStore.currentUser.family_id,
-          membershipData.$id,
-        )
-        console.log("Detailed membership info:", detailedMembership)
-        detailedMemberInfo = detailedMembership
+      if (extendedProfile.documents.length > 0) {
+        const profile = extendedProfile.documents[0]
+        detailedMemberInfo = {
+          email: profile.email || "Email not available",
+          name: profile.name || member.name,
+          userId: member.$id,
+          role: profile.role,
+          isCurrentUser: false,
+        }
       } else {
-        memberDetailError = "Member not found in team."
+        // Fallback: just show what we have
+        detailedMemberInfo = {
+          email: "Email not available",
+          name: member.name || "Name not available",
+          userId: member.$id,
+          role: member.role,
+          isCurrentUser: false,
+        }
       }
-    } catch (err: any) {
-      console.error("Failed to fetch member details:", err)
-      memberDetailError = err.message || "Failed to load member details."
-    } finally {
+
+      isLoadingMemberDetails = false
+    } catch (error) {
+      console.error("Error fetching member details:", error)
+      memberDetailError = "Failed to load member details"
       isLoadingMemberDetails = false
     }
   }
@@ -869,11 +907,7 @@
           {:else if memberDetailError}
             <div class="text-red-600 text-sm">{memberDetailError}</div>
           {:else if detailedMemberInfo}
-            <span class="text-gray-800"
-              >{detailedMemberInfo.userEmail ||
-                detailedMemberInfo.email ||
-                "No email available"}</span
-            >
+            <span class="text-gray-800">{detailedMemberInfo.email}</span>
           {:else}
             <span class="text-gray-500">No email information available</span>
           {/if}
@@ -881,25 +915,33 @@
 
         <!-- Additional Member Information -->
         {#if detailedMemberInfo && !isLoadingMemberDetails}
-          <!-- Join Date -->
-          {#if detailedMemberInfo.$createdAt}
+          <!-- User ID -->
+          <div class="space-y-2">
+            <div class="block text-sm font-bold text-gray-700">User ID:</div>
+            <span class="text-gray-600 text-sm font-mono"
+              >{detailedMemberInfo.userId}</span
+            >
+          </div>
+
+          <!-- Role Information -->
+          {#if detailedMemberInfo.role}
             <div class="space-y-2">
-              <div class="block text-sm font-bold text-gray-700">Joined:</div>
-              <span class="text-gray-800 text-sm"
-                >{new Date(
-                  detailedMemberInfo.$createdAt,
-                ).toLocaleDateString()}</span
+              <div class="block text-sm font-bold text-gray-700">Role:</div>
+              <span class="text-gray-800 capitalize"
+                >{detailedMemberInfo.role}</span
               >
             </div>
           {/if}
 
-          <!-- Membership Status -->
-          {#if detailedMemberInfo.confirm !== undefined}
-            <div class="space-y-2">
-              <div class="block text-sm font-bold text-gray-700">Status:</div>
-              <span class="text-gray-800 text-sm capitalize">
-                {detailedMemberInfo.confirm ? "Active" : "Pending Invitation"}
-              </span>
+          <!-- Current User Indicator -->
+          {#if detailedMemberInfo.isCurrentUser}
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div class="flex items-center gap-2">
+                <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span class="text-blue-700 text-sm font-medium"
+                  >This is you</span
+                >
+              </div>
             </div>
           {/if}
         {/if}
