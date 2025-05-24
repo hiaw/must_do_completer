@@ -414,6 +414,11 @@
 
       // Close the confirmation dialog
       memberToRemove = null
+
+      // Close the member detail modal if it's open
+      if (selectedMember) {
+        closeMemberDetail()
+      }
     } catch (err: any) {
       console.error("Failed to remove family member:", err)
       removeMemberError =
