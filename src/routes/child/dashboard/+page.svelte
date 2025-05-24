@@ -92,55 +92,76 @@
       const userId = $userStore.currentUser.$id
       const familyId = $userStore.currentUser.family_id!
 
-      // Parallel queries for better performance
-      const [tasksResponse, completedTasksResponse] = await Promise.all([
-        // Only fetch pending tasks for the main view
+      // Optimized: Reduced from 3 queries to 2 using Query.or()
+      //
+      // Future optimization: Could be reduced to 1 query by:
+      // 1. Storing completion details directly in the tasks table, OR
+      // 2. Using a view/materialized query that joins tasks + task_history
+      //
+      // Current approach balances performance with data consistency
+      const [allTasksResponse, completionDetailsResponse] = await Promise.all([
+        // Single query to get both pending tasks AND recently completed tasks
         databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
           Query.equal("assigned_to_user_id", userId),
           Query.equal("family_id", familyId),
-          Query.equal("status", "pending"),
+          Query.or([
+            Query.equal("status", "pending"),
+            // Get completed tasks from last 30 days to show recent completions
+            Query.and([
+              Query.equal("status", "completed"),
+              Query.greaterThan(
+                "updated_at",
+                new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+              ),
+            ]),
+          ]),
           Query.orderDesc("created_at"),
-          Query.limit(50), // Limit for performance
+          Query.limit(60), // Higher limit to account for both pending and completed
         ]),
-        // Fetch recent completed tasks with limit
+        // Get completion details (points awarded, completion time, etc.)
         databases.listDocuments(DATABASE_ID, TASK_HISTORY_COLLECTION_ID, [
           Query.equal("user_id", userId),
           Query.equal("family_id", familyId),
           Query.orderDesc("completed_at"),
-          Query.limit(10), // Only get recent completions
+          Query.limit(10),
         ]),
       ])
 
-      pendingTasks = tasksResponse.documents as unknown as Task[]
+      const allTasks = allTasksResponse.documents as unknown as Task[]
 
-      // Get task IDs from completed tasks to fetch their details efficiently
-      const completedTaskIds = (
-        completedTasksResponse.documents as unknown as TaskCompletion[]
+      // Separate pending and completed tasks
+      pendingTasks = allTasks.filter((task) => task.status === "pending")
+      const recentCompletedTasks = allTasks.filter(
+        (task) => task.status === "completed",
       )
-        .map((completion) => completion.task_id)
-        .filter((id, index, arr) => arr.indexOf(id) === index) // Remove duplicates
 
-      // Fetch completed task details in one query if we have any
-      let completedTaskDetails: Task[] = []
-      if (completedTaskIds.length > 0) {
-        const completedTasksDetailsResponse = await databases.listDocuments(
-          DATABASE_ID,
-          TASKS_COLLECTION_ID,
-          [Query.equal("$id", completedTaskIds), Query.limit(10)],
-        )
-        completedTaskDetails =
-          completedTasksDetailsResponse.documents as unknown as Task[]
-      }
+      // Enrich completed tasks with completion details from task_history
+      const completionDetails =
+        completionDetailsResponse.documents as unknown as TaskCompletion[]
 
-      // Enrich completed tasks with task details
-      completedTasks = (
-        completedTasksResponse.documents as unknown as TaskCompletion[]
-      ).map((completion) => ({
-        ...completion,
-        task: completedTaskDetails.find(
-          (task) => task.$id === completion.task_id,
-        ),
-      }))
+      completedTasks = completionDetails
+        .map((completion) => {
+          // Find the corresponding task details
+          const taskDetails = recentCompletedTasks.find(
+            (task) => task.$id === completion.task_id,
+          )
+
+          return {
+            ...completion,
+            task: taskDetails || {
+              // Fallback if task not found in recent completed tasks
+              $id: completion.task_id,
+              title: "Completed Task",
+              assigned_to_user_id: userId,
+              created_by_user_id: "",
+              family_id: familyId,
+              status: "completed" as const,
+              priority: "medium" as const,
+              points: completion.points_awarded || 0,
+            },
+          }
+        })
+        .slice(0, 10) // Keep only 10 most recent
 
       lastFetchTime = now
     } catch (err: any) {
