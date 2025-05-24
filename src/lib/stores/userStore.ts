@@ -1,4 +1,4 @@
-import { writable } from "svelte/store"
+import { writable, get } from "svelte/store"
 import { account, databases, teams } from "$lib/appwrite"
 import { ID, Query } from "appwrite"
 
@@ -27,14 +27,26 @@ export interface AppwriteUserStoreState {
 
 const initialState: AppwriteUserStoreState = {
   currentUser: null,
-  loading: true,
+  loading: false,
   error: null,
 }
 
 const userStore = writable<AppwriteUserStoreState>(initialState)
 
-async function loadUser() {
+async function loadUser(force: boolean = false) {
   try {
+    const currentState = get(userStore)
+
+    // Prevent duplicate calls if already loading
+    if (currentState.loading && !force) {
+      return
+    }
+
+    // If we already have a user loaded, don't reload unless there's an error or forced
+    if (currentState.currentUser && !currentState.error && !force) {
+      return
+    }
+
     userStore.update((s) => ({ ...s, loading: true, error: null }))
     const acc = await account.get()
 
@@ -73,9 +85,6 @@ async function loadUser() {
 
       // If user is a child with complete profile data, skip team syncing
       if (userProfile.role === "child" && userProfile.family_id) {
-        console.log(
-          `[userStore] Child user ${acc.$id} loaded successfully, skipping team sync`
-        )
         userStore.update((s) => ({
           ...s,
           currentUser: userProfile,
@@ -85,9 +94,6 @@ async function loadUser() {
       }
     } else {
       // No existing extended profile, create a default one (role: parent, no family_id yet)
-      console.log(
-        `[userStore] No extended profile for ${acc.$id}. Creating one with role: 'parent'.`
-      )
       const newExtendedProfileData = {
         user_id: acc.$id,
         role: "parent",
@@ -106,10 +112,6 @@ async function loadUser() {
         $collectionId: newDocument.$collectionId,
       }
       extendedProfileDocId = newDocument.$id
-      console.log(
-        "[userStore] Created new extended profile document:",
-        newDocument
-      )
     }
 
     // Only perform team syncing for parents or users without complete profile data
@@ -143,9 +145,6 @@ async function loadUser() {
               userProfile.role !== teamRole ||
               needsNameSync)
           ) {
-            console.log(
-              `[userStore] Syncing team membership for ${acc.$id}. Team: ${primaryTeam.$id}, Role: ${teamRole}, Name: ${teamMembershipName}`
-            )
             const updateData: {
               family_id: string
               role: "parent" | "child"
@@ -233,8 +232,20 @@ async function loadUser() {
 }
 
 // Lightweight version that skips team syncing - useful for child users
-async function loadUserBasic() {
+async function loadUserBasic(force: boolean = false) {
   try {
+    const currentState = get(userStore)
+
+    // Prevent duplicate calls if already loading
+    if (currentState.loading && !force) {
+      return
+    }
+
+    // If we already have a user loaded, don't reload unless there's an error or forced
+    if (currentState.currentUser && !currentState.error && !force) {
+      return
+    }
+
     userStore.update((s) => ({ ...s, loading: true, error: null }))
     const acc = await account.get()
 

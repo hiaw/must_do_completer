@@ -53,13 +53,19 @@
   let lastFetchTime = 0
   const CACHE_DURATION = 30000 // 30 seconds cache
 
+  // Guard to prevent duplicate fetches
+  let isFetching = false
+
   onMount(() => {
     const unsubscribe = userStore.subscribe(async (value) => {
       if (value.loading) return
 
       if (!value.currentUser || value.currentUser.role !== "child") {
         goto("/login")
-      } else if (value.currentUser.family_id) {
+        return
+      }
+
+      if (value.currentUser.family_id && !isFetching) {
         await fetchTasksOptimized()
       }
     })
@@ -67,7 +73,7 @@
   })
 
   async function fetchTasksOptimized() {
-    if (!$userStore.currentUser) return
+    if (!$userStore.currentUser || isFetching) return
 
     // Check cache
     const now = Date.now()
@@ -78,6 +84,7 @@
       return // Use cached data
     }
 
+    isFetching = true
     isLoadingTasks = true
     taskError = null
 
@@ -141,6 +148,7 @@
       taskError = err.message
     } finally {
       isLoadingTasks = false
+      isFetching = false
     }
   }
 
@@ -219,6 +227,7 @@
 
   // Refresh function for manual refresh
   async function refreshTasks() {
+    if (isFetching) return // Prevent duplicate calls
     lastFetchTime = 0 // Clear cache
     await fetchTasksOptimized()
   }
