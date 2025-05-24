@@ -2,7 +2,7 @@
   import { onMount } from "svelte"
   import { userStore, type UserProfile, loadUser } from "$lib/stores/userStore"
   import { goto } from "$app/navigation"
-  import { teams, databases } from "$lib/appwrite"
+  import { databases, teams } from "$lib/appwrite"
   import { Query, ID } from "appwrite"
   import CreateTaskModal from "$lib/components/CreateTaskModal.svelte"
   import TaskList from "$lib/components/TaskList.svelte"
@@ -51,56 +51,26 @@
     isLoadingChildren = true
     childrenError = null
     try {
-      const response = await teams.listMemberships(familyTeamId)
-      const memberUserIds = response.memberships.map((m) => m.userId)
-
-      if (memberUserIds.length === 0) {
-        children = []
-        isLoadingChildren = false
-        return
-      }
-
       const userProfilesResponse = await databases.listDocuments(
         DATABASE_ID,
         USERS_EXTENDED_COLLECTION_ID,
-        [Query.equal("user_id", memberUserIds)],
+        [
+          Query.equal("family_id", familyTeamId),
+          Query.equal("role", "child"),
+          Query.limit(50),
+        ],
       )
 
-      const allMembers: UserProfile[] = []
-      for (const membership of response.memberships) {
-        const appwriteUser = await teams.getMembership(
-          familyTeamId,
-          membership.$id,
-        )
-        const extendedProfile = userProfilesResponse.documents.find(
-          (doc) => doc.user_id === membership.userId,
-        )
-
-        const memberName =
-          extendedProfile?.name ||
-          appwriteUser.userName ||
-          membership.userName ||
-          "Unnamed User"
-
-        allMembers.push({
-          $id: membership.userId,
-          name: memberName,
-          email: appwriteUser.userEmail,
-          prefs: {},
-          role:
-            (extendedProfile?.role as "parent" | "child") ||
-            (membership.roles.includes("child")
-              ? "child"
-              : membership.roles.includes("parent")
-                ? "parent"
-                : undefined),
-          family_id: familyTeamId,
-          $databaseId: extendedProfile?.$id,
-          $collectionId: extendedProfile?.$collectionId,
-        })
-      }
-
-      children = allMembers.filter((member) => member.role === "child")
+      children = userProfilesResponse.documents.map((doc: any) => ({
+        $id: doc.user_id,
+        name: doc.name || "Unnamed User",
+        email: doc.email || "No email available",
+        prefs: {},
+        role: "child" as const,
+        family_id: familyTeamId,
+        $databaseId: doc.$id,
+        $collectionId: doc.$collectionId,
+      }))
     } catch (err: any) {
       console.error("Failed to fetch children:", err)
       childrenError = err.message
