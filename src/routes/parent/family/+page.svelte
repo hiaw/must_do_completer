@@ -22,13 +22,14 @@
   let isUpdatingChildName = false
   let updateNameError: string | null = null
 
-  // Add child functionality
-  let isAddingChild = false
-  let newChildEmail = ""
-  let newChildName = ""
-  let isInvitingChild = false
-  let inviteChildError: string | null = null
-  let inviteChildSuccess: string | null = null
+  // Add family member functionality
+  let isAddingMember = false
+  let newMemberEmail = ""
+  let newMemberName = ""
+  let newMemberRole: "parent" | "child" = "child"
+  let isInvitingMember = false
+  let inviteMemberError: string | null = null
+  let inviteMemberSuccess: string | null = null
 
   // Remove member functionality
   let memberToRemove: UserProfile | null = null
@@ -264,41 +265,43 @@
     }
   }
 
-  function startAddingChild() {
-    isAddingChild = true
-    newChildEmail = ""
-    newChildName = ""
-    inviteChildError = null
-    inviteChildSuccess = null
+  function startAddingMember() {
+    isAddingMember = true
+    newMemberEmail = ""
+    newMemberName = ""
+    newMemberRole = "child"
+    inviteMemberError = null
+    inviteMemberSuccess = null
   }
 
-  function cancelAddingChild() {
-    isAddingChild = false
-    newChildEmail = ""
-    newChildName = ""
-    inviteChildError = null
-    inviteChildSuccess = null
+  function cancelAddingMember() {
+    isAddingMember = false
+    newMemberEmail = ""
+    newMemberName = ""
+    newMemberRole = "child"
+    inviteMemberError = null
+    inviteMemberSuccess = null
   }
 
-  async function inviteChild() {
-    if (!newChildEmail.trim()) {
-      inviteChildError = "Email is required."
+  async function inviteMember() {
+    if (!newMemberEmail.trim()) {
+      inviteMemberError = "Email is required."
       return
     }
 
     if (!$userStore.currentUser?.family_id) {
-      inviteChildError = "No family context found."
+      inviteMemberError = "No family context found."
       return
     }
 
-    isInvitingChild = true
-    inviteChildError = null
-    inviteChildSuccess = null
+    isInvitingMember = true
+    inviteMemberError = null
+    inviteMemberSuccess = null
 
     try {
-      const trimmedEmail = newChildEmail.trim()
-      const teamRoles = ["child"]
-      const targetUrl = `${window.location.origin}/family/join?invitedRole=child`
+      const trimmedEmail = newMemberEmail.trim()
+      const teamRoles = [newMemberRole]
+      const targetUrl = `${window.location.origin}/family/join?invitedRole=${newMemberRole}`
 
       const newMembership = await teams.createMembership(
         $userStore.currentUser.family_id,
@@ -307,10 +310,10 @@
         undefined,
         undefined,
         targetUrl,
-        newChildName.trim() || undefined,
+        newMemberName.trim() || undefined,
       )
 
-      if (newChildName.trim()) {
+      if (newMemberName.trim()) {
         try {
           await databases.createDocument(
             DATABASE_ID,
@@ -318,9 +321,9 @@
             ID.unique(),
             {
               user_id: newMembership.userId,
-              role: "child",
+              role: newMemberRole,
               family_id: $userStore.currentUser.family_id,
-              name: newChildName.trim(),
+              name: newMemberName.trim(),
             },
           )
         } catch (createError) {
@@ -328,18 +331,18 @@
         }
       }
 
-      inviteChildSuccess = `Invitation sent to ${trimmedEmail}${newChildName ? ` (${newChildName})` : ""}!`
+      inviteMemberSuccess = `Invitation sent to ${trimmedEmail}${newMemberName ? ` (${newMemberName})` : ""} as ${newMemberRole}!`
 
-      newChildEmail = ""
-      newChildName = ""
+      newMemberEmail = ""
+      newMemberName = ""
 
       await fetchFamilyMembers($userStore.currentUser.family_id)
     } catch (err: any) {
-      console.error("Failed to invite child:", err)
-      inviteChildError =
+      console.error("Failed to invite member:", err)
+      inviteMemberError =
         err.message || "An unknown error occurred while sending the invitation."
     } finally {
-      isInvitingChild = false
+      isInvitingMember = false
     }
   }
 
@@ -475,76 +478,91 @@
       <section class="bg-white">
         <div class="flex justify-between items-center mb-8">
           <h2 class="text-2xl font-semibold text-gray-800">Family Members</h2>
-          {#if !isAddingChild}
+          {#if !isAddingMember}
             <button
               type="button"
-              on:click={startAddingChild}
+              on:click={startAddingMember}
               class="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-bold"
             >
-              + Add Child
+              + Add Member
             </button>
           {/if}
         </div>
 
-        {#if isAddingChild}
+        {#if isAddingMember}
           <div class="bg-gray-50 border border-gray-300 rounded-lg p-8 mb-8">
             <h3 class="text-xl font-semibold text-gray-800 mb-6">
-              Invite New Child
+              Invite New Member
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div class="flex flex-col gap-2">
-                <label for="newChildEmail" class="font-bold text-gray-700"
-                  >Child's Email:</label
+                <label for="newMemberEmail" class="font-bold text-gray-700"
+                  >Member's Email:</label
                 >
                 <input
                   type="email"
-                  id="newChildEmail"
-                  bind:value={newChildEmail}
-                  placeholder="child@example.com"
-                  disabled={isInvitingChild}
+                  id="newMemberEmail"
+                  bind:value={newMemberEmail}
+                  placeholder="member@example.com"
+                  disabled={isInvitingMember}
                   required
                   class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div class="flex flex-col gap-2">
-                <label for="newChildName" class="font-bold text-gray-700"
-                  >Child's Name (optional):</label
+                <label for="newMemberName" class="font-bold text-gray-700"
+                  >Member's Name (optional):</label
                 >
                 <input
                   type="text"
-                  id="newChildName"
-                  bind:value={newChildName}
+                  id="newMemberName"
+                  bind:value={newMemberName}
                   placeholder="e.g., Emma, Jake"
-                  disabled={isInvitingChild}
+                  disabled={isInvitingMember}
                   class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+              </div>
+              <div class="flex flex-col gap-2">
+                <label for="newMemberRole" class="font-bold text-gray-700"
+                  >Role:</label
+                >
+                <select
+                  id="newMemberRole"
+                  bind:value={newMemberRole}
+                  disabled={isInvitingMember}
+                  class="px-3 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="child">Child</option>
+                  <option value="parent">Parent</option>
+                </select>
               </div>
             </div>
             <div class="flex gap-2">
               <button
                 type="button"
-                on:click={inviteChild}
-                disabled={isInvitingChild}
+                on:click={inviteMember}
+                disabled={isInvitingMember}
                 class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
               >
-                {#if isInvitingChild}Sending Invitation...{:else}Send Invitation{/if}
+                {#if isInvitingMember}Sending Invitation...{:else}Send
+                  Invitation{/if}
               </button>
               <button
                 type="button"
-                on:click={cancelAddingChild}
-                disabled={isInvitingChild}
+                on:click={cancelAddingMember}
+                disabled={isInvitingMember}
                 class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
               >
                 Cancel
               </button>
             </div>
-            {#if inviteChildSuccess}
+            {#if inviteMemberSuccess}
               <p class="text-green-600 text-sm mt-2 font-bold">
-                {inviteChildSuccess}
+                {inviteMemberSuccess}
               </p>
             {/if}
-            {#if inviteChildError}
-              <p class="text-red-600 text-sm mt-2">{inviteChildError}</p>
+            {#if inviteMemberError}
+              <p class="text-red-600 text-sm mt-2">{inviteMemberError}</p>
             {/if}
           </div>
         {/if}
