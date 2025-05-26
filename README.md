@@ -1,38 +1,87 @@
-# sv
+# Must-Dos Completer
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A family task management application built with SvelteKit and Appwrite, designed to help families organize and track recurring tasks with a points-based reward system.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- 👨‍👩‍👧‍👦 Family-based task management
+- 🔄 Recurring task scheduling (daily/weekly)
+- 🎯 Points-based reward system
+- 👤 User roles (Parent/Child)
+- 📱 Responsive design with Tailwind CSS
 
-```bash
-# create a new project in the current directory
-npx sv create
+## Tech Stack
 
-# create a new project in my-app
-npx sv create my-app
-```
+- **Frontend**: SvelteKit 5 with TypeScript
+- **Styling**: Tailwind CSS
+- **Backend**: Appwrite
+- **Deployment**: Cloudflare Pages
+- **Package Manager**: Bun
 
-## Developing
+## Getting Started
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+### Prerequisites
 
-```bash
-npm run dev
+- [Bun](https://bun.sh/) installed
+- [Appwrite](https://appwrite.io/) account and project set up
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+### Development
+
+1. Clone the repository
+2. Install dependencies:
+
+   ```bash
+   bun install
+   ```
+
+3. Start the development server:
+
+   ```bash
+   bun run dev
+   ```
+
+4. Open your browser to `http://localhost:5173`
 
 ## Building
 
 To create a production version of your app:
 
 ```bash
-npm run build
+bun run build
 ```
 
-You can preview the production build with `npm run preview`.
+You can preview the production build with `bun run preview`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Deployment
+
+This project is configured for automatic deployment to Cloudflare Pages via GitHub Actions.
+
+📖 **See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete deployment setup instructions.**
+
+### Quick Setup
+
+1. Get your Cloudflare Account ID and create an API token
+2. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as GitHub repository secrets
+3. Push to the `main` branch - deployment happens automatically!
+
+Your app will be available at: `https://must-dos-completer.pages.dev`
+
+## Project Structure
+
+```
+src/
+├── lib/
+│   ├── types/          # TypeScript interfaces
+│   └── ...
+├── routes/             # SvelteKit routes
+└── app.html           # HTML template
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Push to your branch and create a Pull Request
+
+Pull requests automatically create preview deployments for testing.
